@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.EventObject;
 import java.util.List;
 import javax.media.opengl.GLAutoDrawable;
+import javax.media.opengl.GLCapabilities;
+import javax.media.opengl.GLProfile;
 import javax.swing.JFrame;
 import js.jogl.prog.GLProgram;
 import js.jogl.view.Viewport;
@@ -64,6 +66,17 @@ abstract public class Viewer extends GLProgram
     public Viewer(Configuration config, int w, int h) {
         super(w, h);
         this.config = config;
+    }
+    
+    public static GLCapabilities determineGLCapabilities(Configuration config) {
+        GLProfile glp = GLProfile.get(GLProfile.GL2);
+        GLCapabilities caps = new GLCapabilities(glp);
+        caps.setStereo(config.graphics.useStereo);
+        if (config.graphics.useFsaa) {
+            caps.setSampleBuffers(true);
+            caps.setNumSamples(config.graphics.fsaaSamples);
+        }
+        return caps;
     }
     
     public WorldModel getWorldModel() {

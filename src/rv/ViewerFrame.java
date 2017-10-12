@@ -29,9 +29,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.List;
 import java.util.Locale;
 import javax.imageio.ImageIO;
 import javax.media.opengl.GL;
@@ -39,7 +37,6 @@ import javax.media.opengl.GL2;
 import javax.media.opengl.GLAutoDrawable;
 import javax.media.opengl.GLCapabilities;
 import javax.media.opengl.GLEventListener;
-import javax.media.opengl.GLProfile;
 import javax.media.opengl.awt.GLCanvas;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
@@ -317,13 +314,7 @@ public class ViewerFrame extends Viewer
     public static void main(String[] args) {
         final Configuration config = Configuration.loadFromFile();
 
-        GLProfile glp = GLProfile.get(GLProfile.GL2);
-        final GLCapabilities caps = new GLCapabilities(glp);
-        caps.setStereo(config.graphics.useStereo);
-        if (config.graphics.useFsaa) {
-            caps.setSampleBuffers(true);
-            caps.setNumSamples(config.graphics.fsaaSamples);
-        }
+        final GLCapabilities caps = determineGLCapabilities(config);
 
         final String[] arguments = args;
         SwingUtilities.invokeLater(new Runnable() {
