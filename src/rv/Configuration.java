@@ -44,7 +44,7 @@ public class Configuration {
         String userConfig = System.getProperty("user.home") + "/.roboviz/" + CONFIG_FILE_NAME;
         if (new File(userConfig).exists())
             return userConfig;
-        return CONFIG_FILE_NAME;
+        return Configuration.class.getClassLoader().getResource(CONFIG_FILE_NAME).getFile();
     }
 
     public static String getNextLine(BufferedReader in) throws IOException {
