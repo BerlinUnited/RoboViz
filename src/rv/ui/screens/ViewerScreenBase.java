@@ -96,7 +96,7 @@ public abstract class ViewerScreenBase extends ScreenBase
         viewer.addWindowResizeListener(this);
 
         loadOverlayVisibilities(viewer.getConfig().overlayVisibility);
-        createCameraMenu(viewer.getFrame().getMenu().getCameraMenu());
+        createCameraMenu(viewer.getMenu().getCameraMenu());
     }
 
     @Override

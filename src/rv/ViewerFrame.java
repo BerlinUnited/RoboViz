@@ -31,7 +31,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.EventObject;
 import java.util.List;
 import java.util.Locale;
 import javax.imageio.ImageIO;
@@ -51,7 +50,6 @@ import com.jogamp.newt.event.awt.AWTKeyAdapter;
 import com.jogamp.newt.event.awt.AWTMouseAdapter;
 import com.jogamp.opengl.util.awt.Screenshot;
 import js.jogl.GLInfo;
-import js.jogl.prog.GLProgram;
 import js.jogl.view.Viewport;
 import rv.comm.NetworkManager;
 import rv.comm.drawing.Drawings;
@@ -74,108 +72,28 @@ import rv.world.WorldModel;
  * 
  * @author Justin Stoecker
  */
-public class Viewer extends GLProgram
+public class ViewerFrame extends Viewer
         implements GLEventListener, ServerComm.ServerChangeListener, LogPlayer.StateChangeListener {
 
     private static final String VERSION = "1.3.0";
 
-    public enum Mode {
-        LOGFILE, LIVE,
-    }
-
-    /** Event object for when the main RoboViz window is resized */
-    public class WindowResizeEvent extends EventObject {
-
-        private final Viewport       window;
-        private final GLAutoDrawable drawable;
-
-        public Viewport getWindow() {
-            return window;
-        }
-
-        public GLAutoDrawable getDrawable() {
-            return drawable;
-        }
-
-        public WindowResizeEvent(Object src, Viewport window) {
-            super(src);
-            this.window = window;
-            this.drawable = getCanvas();
-        }
-    }
-
-    /** Event listener interface when the main RoboViz window is resized */
-    public interface WindowResizeListener {
-        void windowResized(WindowResizeEvent event);
-    }
-
-    private final List<WindowResizeListener> windowResizeListeners = new ArrayList<>();
-
     private RVFrame                          frame;
     private boolean                          movedFrame;
     private GLCanvas                         canvas;
-    private WorldModel                       world;
-    private UserInterface                    ui;
-    private NetworkManager                   netManager;
     private ContentManager                   contentManager;
-    private Drawings                         drawings;
-    private Renderer                         renderer;
-    private LogPlayer                        logPlayer;
     boolean                                  init                  = false;
     private boolean                          fullscreen            = false;
     private GLInfo                           glInfo;
-    private final Configuration              config;
     private String                           ssName                = null;
     private File                             logFile;
     private String                           drawingFilter;
-    private Mode                             mode                  = Mode.LIVE;
-
-    public LogPlayer getLogPlayer() {
-        return logPlayer;
-    }
-
-    public Mode getMode() {
-        return mode;
-    }
 
     public GLInfo getGLInfo() {
         return glInfo;
     }
 
-    public Configuration getConfig() {
-        return config;
-    }
-
     public Viewport getScreen() {
         return screen;
-    }
-
-    public WorldModel getWorldModel() {
-        return world;
-    }
-
-    public UserInterface getUI() {
-        return ui;
-    }
-
-    public NetworkManager getNetManager() {
-        return netManager;
-    }
-
-    public Drawings getDrawings() {
-        return drawings;
-    }
-
-    public RVFrame getFrame() {
-        return frame;
-    }
-
-    public void addWindowResizeListener(WindowResizeListener l) {
-        windowResizeListeners.add(l);
-    }
-
-    public void removeWindowResizeListener(WindowResizeListener l) {
-        windowResizeListeners.remove(l);
     }
 
     public void shutdown() {
@@ -185,13 +103,8 @@ public class Viewer extends GLProgram
         System.exit(0);
     }
 
-    public Renderer getRenderer() {
-        return renderer;
-    }
-
-    public Viewer(Configuration config, GLCapabilities caps, String[] args) {
-        super(config.graphics.frameWidth, config.graphics.frameHeight);
-        this.config = config;
+    public ViewerFrame(Configuration config, GLCapabilities caps, String[] args) {
+        super(config, config.graphics.frameWidth, config.graphics.frameHeight);
 
         parseArgs(args);
         initComponents(caps);
@@ -415,7 +328,7 @@ public class Viewer extends GLProgram
         final String[] arguments = args;
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
-                new Viewer(config, caps, arguments);
+                new ViewerFrame(config, caps, arguments);
             }
         });
     }
@@ -483,13 +396,23 @@ public class Viewer extends GLProgram
         return current + " - " + roboviz;
     }
 
+    @Override
+    public JFrame getFrame() {
+        return this.frame;
+    }
+
+    @Override
+    public MenuBar getMenu() {
+        return this.frame.getMenu();
+    }
+
     public class RVFrame extends JFrame {
 
         private MenuBar menuBar;
 
         public RVFrame(String title) throws HeadlessException {
             super(title);
-            menuBar = new MenuBar(Viewer.this);
+            menuBar = new MenuBar(ViewerFrame.this);
             setJMenuBar(menuBar);
         }
 

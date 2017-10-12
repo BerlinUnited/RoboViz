@@ -30,6 +30,7 @@ import javax.swing.WindowConstants;
 import rv.Configuration;
 import rv.Globals;
 import rv.Viewer;
+import rv.ViewerFrame;
 import rv.util.swing.SwingUtil;
 
 public class RVConfigure extends JFrame {
@@ -92,7 +93,7 @@ public class RVConfigure extends JFrame {
         startButton.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent arg0) {
                 RVConfigure.this.setVisible(false);
-                Viewer.main(new String[] {});
+                ViewerFrame.main(new String[] {});
             }
         });
         southPanel.add(startButton);
