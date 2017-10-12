@@ -6,7 +6,7 @@ mkdir %BIN%
 :COMPILE
 set VIZCLASSPATH=%JOGL%\gluegen-rt.jar;%JOGL%\jogl.all.jar;%JOGL%\nativewindow.all.jar;%JOGL%\newt.all.jar;lib\jsgl.jar;lib\commons-compress-1.5.jar;src\ 
 echo %VIZCLASSPATH%
-javac -d %BIN% -cp %VIZCLASSPATH% src\rv\Viewer.java
+javac -d %BIN% -cp %VIZCLASSPATH% src\rv\ViewerFrame.java
 javac -d %BIN% -cp %VIZCLASSPATH% src\config\RVConfigure.java
 
 xcopy /E resources %BIN%\resources\
