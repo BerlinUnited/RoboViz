@@ -25,6 +25,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
+import java.net.URL;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -44,7 +45,11 @@ public class Configuration {
         String userConfig = System.getProperty("user.home") + "/.roboviz/" + CONFIG_FILE_NAME;
         if (new File(userConfig).exists())
             return userConfig;
-        return Configuration.class.getClassLoader().getResource(CONFIG_FILE_NAME).getFile();
+        URL t;
+        if((t = Configuration.class.getClassLoader().getResource(CONFIG_FILE_NAME)) != null) {
+            return t.getFile();
+        }
+        return CONFIG_FILE_NAME;
     }
 
     public static String getNextLine(BufferedReader in) throws IOException {

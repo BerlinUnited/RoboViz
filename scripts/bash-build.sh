@@ -20,6 +20,7 @@ fi
 VIZCLASSPATH=$CLASSPATH:$JOGL/gluegen-rt.jar:$JOGL/jogl.all.jar:$JOGL/nativewindow.all.jar:$JOGL/newt.all.jar:../lib/jsgl.jar:../lib/commons-compress-1.5.jar:../src/
 javac -d $BIN -cp $VIZCLASSPATH ../src/rv/ViewerFrame.java
 javac -d $BIN -cp $VIZCLASSPATH ../src/rv/ViewerPanel.java
+javac -d $BIN -cp $VIZCLASSPATH ../src/rv/ViewerPanelLoader.java
 javac -d $BIN -cp $VIZCLASSPATH ../src/config/RVConfigure.java
 
 # copy over resources and libraries to bin folder
