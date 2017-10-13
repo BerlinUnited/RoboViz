@@ -8,6 +8,7 @@ set VIZCLASSPATH=%JOGL%\gluegen-rt.jar;%JOGL%\jogl.all.jar;%JOGL%\nativewindow.a
 echo %VIZCLASSPATH%
 javac -d %BIN% -cp %VIZCLASSPATH% src\rv\ViewerFrame.java
 javac -d %BIN% -cp %VIZCLASSPATH% src\rv\ViewerPanel.java
+javac -d %BIN% -cp %VIZCLASSPATH% src\rv\ViewerPanelLoader.java
 javac -d %BIN% -cp %VIZCLASSPATH% src\config\RVConfigure.java
 
 xcopy /E resources %BIN%\resources\
