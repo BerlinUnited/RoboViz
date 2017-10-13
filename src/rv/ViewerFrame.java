@@ -25,43 +25,21 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.IOException;
 import java.io.PrintStream;
-import java.util.Calendar;
-import java.util.Locale;
-import javax.imageio.ImageIO;
-import javax.media.opengl.GL;
-import javax.media.opengl.GL2;
-import javax.media.opengl.GLAutoDrawable;
 import javax.media.opengl.GLCapabilities;
 import javax.media.opengl.GLEventListener;
 import javax.media.opengl.awt.GLCanvas;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
-import com.jogamp.newt.event.KeyListener;
-import com.jogamp.newt.event.MouseListener;
-import com.jogamp.newt.event.awt.AWTKeyAdapter;
-import com.jogamp.newt.event.awt.AWTMouseAdapter;
-import com.jogamp.opengl.util.awt.Screenshot;
-import js.jogl.GLInfo;
-import js.jogl.view.Viewport;
-import rv.comm.NetworkManager;
-import rv.comm.drawing.Drawings;
 import rv.comm.rcssserver.LogPlayer;
 import rv.comm.rcssserver.ServerComm;
-import rv.comm.rcssserver.scenegraph.SceneGraph;
-import rv.content.ContentManager;
-import rv.ui.UserInterface;
 import rv.ui.menus.MenuBar;
 import rv.util.commandline.Argument;
 import rv.util.commandline.BooleanArgument;
 import rv.util.commandline.IntegerArgument;
 import rv.util.commandline.StringArgument;
-import rv.util.swing.SwingUtil;
-import rv.world.WorldModel;
 
 /**
  * Program entry point / main class. Creates a window and delegates OpenGL rendering the Renderer
@@ -76,28 +54,18 @@ public class ViewerFrame extends Viewer
 
     private RVFrame                          frame;
     private boolean                          movedFrame;
-    private GLCanvas                         canvas;
-    private ContentManager                   contentManager;
-    boolean                                  init                  = false;
-    private boolean                          fullscreen            = false;
-    private GLInfo                           glInfo;
-    private String                           ssName                = null;
-    private File                             logFile;
-    private String                           drawingFilter;
 
-    public GLInfo getGLInfo() {
-        return glInfo;
-    }
+    public static void main(String[] args) {
+        final Configuration config = Configuration.loadFromFile();
 
-    public Viewport getScreen() {
-        return screen;
-    }
+        final GLCapabilities caps = determineGLCapabilities(config);
 
-    public void shutdown() {
-        if (config.graphics.saveFrameState)
-            storeConfig();
-        frame.dispose();
-        System.exit(0);
+        final String[] arguments = args;
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                new ViewerFrame(config, caps, arguments);
+            }
+        });
     }
 
     public ViewerFrame(Configuration config, GLCapabilities caps, String[] args) {
@@ -189,6 +157,13 @@ public class ViewerFrame extends Viewer
         frame.setState(maximized ? Frame.MAXIMIZED_BOTH : Frame.NORMAL);
     }
 
+    public void shutdown() {
+        if (config.graphics.saveFrameState)
+            storeConfig();
+        frame.dispose();
+        System.exit(0);
+    }
+
     private void storeConfig() {
         Configuration.Graphics graphics = config.graphics;
         Point location = frame.getLocation();
@@ -208,89 +183,6 @@ public class ViewerFrame extends Viewer
     }
 
     @Override
-    public void init(GLAutoDrawable drawable) {
-        GL2 gl = drawable.getGL().getGL2();
-
-        if (!init) { // print OpenGL renderer info
-            glInfo = new GLInfo(drawable.getGL());
-            glInfo.print();
-        }
-
-        // initialize / load content
-        contentManager = new ContentManager(config.teamColors);
-        if (!contentManager.init(drawable, glInfo)) {
-            exitError("Problems loading resource files!");
-        }
-
-        SceneGraph oldSceneGraph = null;
-        if (init)
-            oldSceneGraph = world.getSceneGraph();
-        world = new WorldModel();
-        world.init(drawable.getGL(), contentManager, config, mode);
-        drawings = new Drawings();
-        ui = new UserInterface(this, drawingFilter);
-
-        if (mode == Mode.LIVE) {
-            netManager = new NetworkManager();
-            netManager.init(this, config);
-            netManager.getServer().addChangeListener(world.getGameState());
-            netManager.getServer().addChangeListener(this);
-        } else {
-            if (!init) {
-                logPlayer = new LogPlayer(logFile, world, config, this);
-                logPlayer.addListener(this);
-                logfileChanged();
-            } else
-                logPlayer.setWorldModel(world);
-        }
-
-        ui.init();
-        renderer = new Renderer(this);
-        renderer.init(drawable, contentManager, glInfo);
-
-        if (init && oldSceneGraph != null)
-            world.setSceneGraph(oldSceneGraph);
-        world.addSceneGraphListener(contentManager);
-
-        gl.glClearColor(0, 0, 0, 1);
-        init = true;
-    }
-
-    public void addKeyListener(KeyListener l) {
-        (new AWTKeyAdapter(l)).addTo(canvas);
-    }
-
-    public void addMouseListener(MouseListener l) {
-        (new AWTMouseAdapter(l)).addTo(canvas);
-    }
-
-    public void takeScreenShot() {
-        String s = Calendar.getInstance().getTime().toString();
-        s = s.replaceAll("[\\s:]+", "_");
-        ssName = String.format(Locale.US, "screenshots/%s_%s.png", "roboviz", s);
-    }
-
-    private void takeScreenshot(String fileName) {
-        BufferedImage ss = Screenshot.readToBufferedImage(0, 0, screen.w, screen.h, false);
-        File ssFile = new File(fileName);
-        File ssDir = new File("screenshots");
-        try {
-            if (!ssDir.exists())
-                ssDir.mkdir();
-            ImageIO.write(ss, "png", ssFile);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        System.out.println("Screenshot taken: " + ssFile.getAbsolutePath());
-    }
-
-    /** Enter or exit full-screen exclusive mode depending on current mode */
-    public void toggleFullScreen() {
-        fullscreen = !fullscreen;
-        SwingUtil.getCurrentScreen(frame).setFullScreenWindow(fullscreen ? frame : null);
-    }
-
     public void exitError(String msg) {
         System.err.println(msg);
         if (animator != null)
@@ -300,66 +192,6 @@ public class ViewerFrame extends Viewer
         System.exit(1);
     }
 
-    public void update(GL glGeneric) {
-        if (!init)
-            return;
-
-        GL2 gl = glGeneric.getGL2();
-        contentManager.update(gl);
-        ui.update(gl, elapsedMS);
-        world.update(gl, elapsedMS, ui);
-        drawings.update();
-    }
-
-    public static void main(String[] args) {
-        final Configuration config = Configuration.loadFromFile();
-
-        final GLCapabilities caps = determineGLCapabilities(config);
-
-        final String[] arguments = args;
-        SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-                new ViewerFrame(config, caps, arguments);
-            }
-        });
-    }
-
-    @Override
-    public void dispose(GLAutoDrawable drawable) {
-        GL gl = drawable.getGL();
-
-        if (netManager != null)
-            netManager.shutdown();
-        if (world != null)
-            world.dispose(gl);
-        if (renderer != null)
-            renderer.dispose(gl);
-        if (contentManager != null)
-            contentManager.dispose(gl);
-    }
-
-    @Override
-    public void reshape(GLAutoDrawable drawable, int x, int y, int w, int h) {
-        super.reshape(drawable, x, y, w, h);
-
-        WindowResizeEvent event = new WindowResizeEvent(this, screen);
-        for (WindowResizeListener l : windowResizeListeners)
-            l.windowResized(event);
-    }
-
-    @Override
-    public void render(GL gl) {
-        if (!init)
-            return;
-
-        if (ssName != null) {
-            takeScreenshot(ssName);
-            ssName = null;
-        }
-
-        renderer.render(drawable, config.graphics);
-    }
-
     @Override
     public void connectionChanged(ServerComm server) {
         if (mode != Mode.LIVE)
@@ -367,12 +199,6 @@ public class ViewerFrame extends Viewer
 
         String host = server.isConnected() ? config.networking.getServerHost() : null;
         frame.setTitle(getTitle(host));
-    }
-
-    @Override
-    public void playerStateChanged(boolean playing) {
-        if (getUI().getBallTracker() != null)
-            getUI().getBallTracker().setPlaybackSpeed(logPlayer.getPlayBackSpeed());
     }
 
     @Override
