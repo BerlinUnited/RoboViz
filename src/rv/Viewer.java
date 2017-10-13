@@ -1,10 +1,21 @@
+/*
+ *  Copyright 2011 RoboViz
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 package rv;
 
-import com.jogamp.newt.event.KeyListener;
-import com.jogamp.newt.event.MouseListener;
-import com.jogamp.newt.event.awt.AWTKeyAdapter;
-import com.jogamp.newt.event.awt.AWTMouseAdapter;
-import com.jogamp.opengl.util.awt.Screenshot;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -18,9 +29,15 @@ import javax.media.opengl.GL;
 import javax.media.opengl.GL2;
 import javax.media.opengl.GLAutoDrawable;
 import javax.media.opengl.GLCapabilities;
+import javax.media.opengl.GLEventListener;
 import javax.media.opengl.GLProfile;
 import javax.media.opengl.awt.GLCanvas;
 import javax.swing.JFrame;
+import com.jogamp.newt.event.KeyListener;
+import com.jogamp.newt.event.MouseListener;
+import com.jogamp.newt.event.awt.AWTKeyAdapter;
+import com.jogamp.newt.event.awt.AWTMouseAdapter;
+import com.jogamp.opengl.util.awt.Screenshot;
 import js.jogl.GLInfo;
 import js.jogl.prog.GLProgram;
 import js.jogl.view.Viewport;
@@ -39,26 +56,10 @@ import rv.world.WorldModel;
  *
  * @author Philipp Strobel <philippstrobel@posteo.de>
  */
-abstract public class Viewer extends GLProgram implements ServerComm.ServerChangeListener, LogPlayer.StateChangeListener
-{
-    protected WorldModel                       world;
-    protected UserInterface                    ui;
-    protected NetworkManager                   netManager;
-    protected Drawings                         drawings;
-    protected Renderer                         renderer;
-    protected LogPlayer                        logPlayer;
-    protected final Configuration              config;
-    protected boolean         init = false;
-    protected GLInfo          glInfo;
-    protected ContentManager  contentManager;
-    protected String          drawingFilter;
-    protected File            logFile;
-    protected String          ssName = null;
-    protected boolean         fullscreen = false;
-    protected GLCanvas                         canvas;
-    protected Mode                             mode                  = Mode.LIVE;
+abstract public class Viewer extends GLProgram
+        implements GLEventListener, ServerComm.ServerChangeListener, LogPlayer.StateChangeListener {
 
-    protected final List<WindowResizeListener> windowResizeListeners = new ArrayList<>();
+    private static final String VERSION = "1.3.0";
 
     public enum Mode {
         LOGFILE, LIVE,
@@ -90,6 +91,75 @@ abstract public class Viewer extends GLProgram implements ServerComm.ServerChang
         void windowResized(WindowResizeEvent event);
     }
 
+    protected final List<WindowResizeListener> windowResizeListeners = new ArrayList<>();
+
+    protected GLCanvas                         canvas;
+    protected WorldModel                       world;
+    protected UserInterface                    ui;
+    protected NetworkManager                   netManager;
+    protected ContentManager                   contentManager;
+    protected Drawings                         drawings;
+    protected Renderer                         renderer;
+    protected LogPlayer                        logPlayer;
+    protected boolean                          init                  = false;
+    protected boolean                          fullscreen            = false;
+    protected GLInfo                           glInfo;
+    protected final Configuration              config;
+    protected String                           ssName                = null;
+    protected File                             logFile;
+    protected String                           drawingFilter;
+    protected Mode                             mode                  = Mode.LIVE;
+
+    public LogPlayer getLogPlayer() {
+        return logPlayer;
+    }
+
+    public Mode getMode() {
+        return mode;
+    }
+
+    public GLInfo getGLInfo() {
+        return glInfo;
+    }
+
+    public Configuration getConfig() {
+        return config;
+    }
+
+    public Viewport getScreen() {
+        return screen;
+    }
+
+    public WorldModel getWorldModel() {
+        return world;
+    }
+
+    public UserInterface getUI() {
+        return ui;
+    }
+
+    public NetworkManager getNetManager() {
+        return netManager;
+    }
+
+    public Drawings getDrawings() {
+        return drawings;
+    }
+
+    abstract public JFrame getFrame();
+
+    public void addWindowResizeListener(WindowResizeListener l) {
+        windowResizeListeners.add(l);
+    }
+
+    public void removeWindowResizeListener(WindowResizeListener l) {
+        windowResizeListeners.remove(l);
+    }
+
+    public Renderer getRenderer() {
+        return renderer;
+    }
+
     public Viewer(Configuration config, int w, int h) {
         super(w, h);
         this.config = config;
@@ -105,56 +175,7 @@ abstract public class Viewer extends GLProgram implements ServerComm.ServerChang
         }
         return caps;
     }
-    
-    public WorldModel getWorldModel() {
-        return world;
-    }
 
-    public Mode getMode() {
-        return mode;
-    }
-    
-    public Configuration getConfig() {
-        return config;
-    }
-    
-    public UserInterface getUI() {
-        return ui;
-    }
-
-    public Drawings getDrawings() {
-        return drawings;
-    }
-
-    public NetworkManager getNetManager() {
-        return netManager;
-    }
-
-    public LogPlayer getLogPlayer() {
-        return logPlayer;
-    }
-
-    public Renderer getRenderer() {
-        return renderer;
-    }
-
-    public GLInfo getGLInfo() {
-        return glInfo;
-    }
-
-    @Override
-    public Viewport getScreen() {
-        return screen;
-    }
-
-    public void addWindowResizeListener(WindowResizeListener l) {
-        windowResizeListeners.add(l);
-    }
-
-    public void removeWindowResizeListener(WindowResizeListener l) {
-        windowResizeListeners.remove(l);
-    }
-    
     @Override
     public void init(GLAutoDrawable drawable) {
         GL2 gl = drawable.getGL().getGL2();
@@ -203,21 +224,44 @@ abstract public class Viewer extends GLProgram implements ServerComm.ServerChang
         gl.glClearColor(0, 0, 0, 1);
         init = true;
     }
-    
-    @Override
-    public void render(GL gl) {
-        if (!init)
-            return;
 
-        if (ssName != null) {
-            takeScreenshot(ssName);
-            ssName = null;
+    public void addKeyListener(KeyListener l) {
+        (new AWTKeyAdapter(l)).addTo(canvas);
+    }
+
+    public void addMouseListener(MouseListener l) {
+        (new AWTMouseAdapter(l)).addTo(canvas);
+    }
+
+    public void takeScreenShot() {
+        String s = Calendar.getInstance().getTime().toString();
+        s = s.replaceAll("[\\s:]+", "_");
+        ssName = String.format(Locale.US, "screenshots/%s_%s.png", "roboviz", s);
+    }
+
+    private void takeScreenshot(String fileName) {
+        BufferedImage ss = Screenshot.readToBufferedImage(0, 0, screen.w, screen.h, false);
+        File ssFile = new File(fileName);
+        File ssDir = new File("screenshots");
+        try {
+            if (!ssDir.exists())
+                ssDir.mkdir();
+            ImageIO.write(ss, "png", ssFile);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
 
-        renderer.render(drawable, config.graphics);
+        System.out.println("Screenshot taken: " + ssFile.getAbsolutePath());
     }
-    
-    @Override
+
+    /** Enter or exit full-screen exclusive mode depending on current mode */
+    public void toggleFullScreen() {
+        fullscreen = !fullscreen;
+        SwingUtil.getCurrentScreen(getFrame()).setFullScreenWindow(fullscreen ? getFrame() : null);
+    }
+
+    abstract public void exitError(String msg);
+
     public void update(GL glGeneric) {
         if (!init)
             return;
@@ -228,16 +272,7 @@ abstract public class Viewer extends GLProgram implements ServerComm.ServerChang
         world.update(gl, elapsedMS, ui);
         drawings.update();
     }
-    
-    @Override
-    public void reshape(GLAutoDrawable drawable, int x, int y, int w, int h) {
-        super.reshape(drawable, x, y, w, h);
 
-        WindowResizeEvent event = new WindowResizeEvent(this, screen);
-        for (WindowResizeListener l : windowResizeListeners)
-            l.windowResized(event);
-    }
-    
     @Override
     public void dispose(GLAutoDrawable drawable) {
         GL gl = drawable.getGL();
@@ -253,49 +288,32 @@ abstract public class Viewer extends GLProgram implements ServerComm.ServerChang
     }
 
     @Override
+    public void reshape(GLAutoDrawable drawable, int x, int y, int w, int h) {
+        super.reshape(drawable, x, y, w, h);
+
+        WindowResizeEvent event = new WindowResizeEvent(this, screen);
+        for (WindowResizeListener l : windowResizeListeners)
+            l.windowResized(event);
+    }
+
+    @Override
+    public void render(GL gl) {
+        if (!init)
+            return;
+
+        if (ssName != null) {
+            takeScreenshot(ssName);
+            ssName = null;
+        }
+
+        renderer.render(drawable, config.graphics);
+    }
+
+    @Override
     public void playerStateChanged(boolean playing) {
         if (getUI().getBallTracker() != null)
             getUI().getBallTracker().setPlaybackSpeed(logPlayer.getPlayBackSpeed());
     }
-    
-    public void takeScreenShot() {
-        String s = Calendar.getInstance().getTime().toString();
-        s = s.replaceAll("[\\s:]+", "_");
-        ssName = String.format(Locale.US, "screenshots/%s_%s.png", "roboviz", s);
-    }
-    
-    private void takeScreenshot(String fileName) {
-        BufferedImage ss = Screenshot.readToBufferedImage(0, 0, screen.w, screen.h, false);
-        File ssFile = new File(fileName);
-        File ssDir = new File("screenshots");
-        try {
-            if (!ssDir.exists())
-                ssDir.mkdir();
-            ImageIO.write(ss, "png", ssFile);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
 
-        System.out.println("Screenshot taken: " + ssFile.getAbsolutePath());
-    }
-    
-    /** Enter or exit full-screen exclusive mode depending on current mode */
-    public void toggleFullScreen() {
-        fullscreen = !fullscreen;
-        SwingUtil.getCurrentScreen(getFrame()).setFullScreenWindow(fullscreen ? getFrame() : null);
-    }
-
-    @Override
-    public void addKeyListener(KeyListener l) {
-        (new AWTKeyAdapter(l)).addTo(canvas);
-    }
-
-    @Override
-    public void addMouseListener(MouseListener l) {
-        (new AWTMouseAdapter(l)).addTo(canvas);
-    }
-
-    abstract public JFrame getFrame();
     abstract public MenuBar getMenu();
-    abstract public void exitError(String msg);
 }
