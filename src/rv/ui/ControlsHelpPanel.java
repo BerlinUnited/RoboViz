@@ -1,10 +1,11 @@
 package rv.ui;
 
 import java.awt.Dimension;
+import java.io.File;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.List;
 import javax.swing.JEditorPane;
 import javax.swing.JScrollPane;
@@ -20,10 +21,13 @@ public class ControlsHelpPanel extends FramePanelBase {
         String file = "Could not load help page.";
         List<String> lines = null;
         try {
-            lines = Files.readAllLines(Paths.get("resources/help/controls.html"),
+            File controls = new File(ControlsHelpPanel.class.getClassLoader().getResource("resources/help/controls.html").toURI());
+            lines = Files.readAllLines(controls.toPath(),
                     StandardCharsets.UTF_8);
         } catch (IOException e) {
             e.printStackTrace();
+        } catch (URISyntaxException ex) {
+            ex.printStackTrace();
         }
 
         if (lines != null) {
