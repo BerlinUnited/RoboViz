@@ -16,11 +16,9 @@
 
 package rv.ui.screens;
 
-import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import javax.media.opengl.awt.GLCanvas;
-import javax.swing.AbstractAction;
 import js.math.vector.Vec3f;
 import rv.Configuration;
 import rv.Viewer;
@@ -34,318 +32,290 @@ import rv.world.WorldModel;
 import rv.world.objects.Agent;
 import rv.world.objects.Ball;
 
-public class LiveGameScreen extends ViewerScreenBase implements ServerComm.ServerChangeListener {
+public class LiveGameScreen extends ViewerScreenBase implements ServerComm.ServerChangeListener
+{
+	private final PlaymodeOverlay playmodeOverlay;
+	private final InfoOverlay connectionOverlay;
 
-    private final PlaymodeOverlay playmodeOverlay;
-    private final InfoOverlay     connectionOverlay;
+	public LiveGameScreen(Viewer viewer)
+	{
+		super(viewer);
+		ServerSpeedBenchmarker ssb = new ServerSpeedBenchmarker();
+		viewer.getWorldModel().getGameState().addListener(ssb);
+		viewer.getNetManager().getServer().addChangeListener(this);
+		viewer.getNetManager().getServer().addChangeListener(ssb);
+		gameStateOverlay.addServerSpeedBenchmarker(ssb);
+		playmodeOverlay = new PlaymodeOverlay(viewer, this);
+		overlays.add(playmodeOverlay);
+		connectionOverlay = new InfoOverlay().setMessage(getConnectionMessage());
+		overlays.add(connectionOverlay);
+		createServerMenu(viewer.getMenu().getServerMenu());
+	}
 
-    public LiveGameScreen(Viewer viewer) {
-        super(viewer);
-        ServerSpeedBenchmarker ssb = new ServerSpeedBenchmarker();
-        viewer.getWorldModel().getGameState().addListener(ssb);
-        viewer.getNetManager().getServer().addChangeListener(this);
-        viewer.getNetManager().getServer().addChangeListener(ssb);
-        gameStateOverlay.addServerSpeedBenchmarker(ssb);
-        playmodeOverlay = new PlaymodeOverlay(viewer, this);
-        overlays.add(playmodeOverlay);
-        connectionOverlay = new InfoOverlay().setMessage(getConnectionMessage());
-        overlays.add(connectionOverlay);
-        createServerMenu(viewer.getMenu().getServerMenu());
-    }
+	@Override
+	protected void loadOverlayVisibilities(Configuration.OverlayVisibility config)
+	{
+		super.loadOverlayVisibilities(config);
+		gameStateOverlay.setShowServerSpeed(config.serverSpeed);
+	}
 
-    @Override
-    protected void loadOverlayVisibilities(Configuration.OverlayVisibility config) {
-        super.loadOverlayVisibilities(config);
-        gameStateOverlay.setShowServerSpeed(config.serverSpeed);
-    }
+	@Override
+	public void createViewMenu(Menu menu)
+	{
+		super.createViewMenu(menu);
+		menu.addItem("Toggle Server Speed", "M", this ::toggleShowServerSpeed);
+		menu.addItem("Playmode Overlay", "O", this ::openPlaymodeOverlay);
+	}
 
-    @Override
-    public void createViewMenu(Menu menu) {
-        super.createViewMenu(menu);
+	private void createServerMenu(Menu menu)
+	{
+		if (!viewer.getConfig().networking.autoConnect)
+			menu.addItem("Connect", "C", this ::connect);
 
-        menu.addItem("Toggle Server Speed", "M", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                toggleShowServerSpeed();
-            }
-        });
+		menu.addItem("Kill Server", "shift X", () -> getServer().killServer());
 
-        menu.addItem("Playmode Overlay", "O", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                openPlaymodeOverlay();
-            }
-        });
-    }
+		menu.addItem("Kick Off Left", "K", () -> kickOff(true));
+		menu.addItem("Kick Off Right", "J", () -> kickOff(false));
 
-    private void createServerMenu(Menu menu) {
-        if (!viewer.getConfig().networking.autoConnect)
-            menu.addItem("Connect", "C", new AbstractAction() {
-                @Override
-                public void actionPerformed(ActionEvent e) {
-                    connect();
-                }
-            });
+		menu.addItem("Free Kick Left", "L", () -> freeKick(true));
+		menu.addItem("Free Kick Right", "R", () -> freeKick(false));
 
-        menu.addItem("Kill Server", "shift X", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                getServer().killServer();
-            }
-        });
+		menu.addItem("Direct Free Kick Left", "shift L", () -> directFreeKick(true));
+		menu.addItem("Direct Free Kick Right", "shift R", () -> directFreeKick(false));
 
-        menu.addItem("Kick Off Left", "K", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                kickOff(true);
-            }
-        });
-        menu.addItem("Kick Off Right", "J", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                kickOff(false);
-            }
-        });
+		menu.addItem("Reset Time", "shift T", () -> getServer().resetTime());
 
-        menu.addItem("Free Kick Left", "L", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                freeKick(true);
-            }
-        });
-        menu.addItem("Free Kick Right", "R", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                freeKick(false);
-            }
-        });
+		menu.addItem("Request Full State Update", "U", () -> getServer().requestFullState());
 
-        menu.addItem("Direct Free Kick Left", "shift L", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                directFreeKick(true);
-            }
-        });
-        menu.addItem("Direct Free Kick Right", "shift R", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                directFreeKick(false);
-            }
-        });
+		menu.addItem("Drop Ball", "B", this ::dropBall);
+	}
 
-        menu.addItem("Reset Time", "shift T", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                getServer().resetTime();
-            }
-        });
+	private ServerComm getServer()
+	{
+		return viewer.getNetManager().getServer();
+	}
 
-        menu.addItem("Request Full State Update", "U", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                getServer().requestFullState();
-            }
-        });
+	private void kickOff(boolean left)
+	{
+		resetTimeIfExpired();
+		getServer().kickOff(left);
+	}
 
-        menu.addItem("Drop Ball", "B", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                dropBall();
-            }
-        });
-    }
+	private void directFreeKick(boolean left)
+	{
+		resetTimeIfExpired();
+		getServer().directFreeKick(left);
+	}
 
-    private ServerComm getServer() {
-        return viewer.getNetManager().getServer();
-    }
+	private void freeKick(boolean left)
+	{
+		resetTimeIfExpired();
+		getServer().freeKick(left);
+	}
 
-    private void kickOff(boolean left) {
-        resetTimeIfExpired();
-        getServer().kickOff(left);
-    }
+	private void connect()
+	{
+		if (!getServer().isConnected())
+			getServer().connect();
+	}
 
-    private void directFreeKick(boolean left) {
-        resetTimeIfExpired();
-        getServer().directFreeKick(left);
-    }
+	private void dropBall()
+	{
+		resetTimeIfExpired();
+		getServer().dropBall();
+	}
 
-    private void freeKick(boolean left) {
-        resetTimeIfExpired();
-        getServer().freeKick(left);
-    }
+	private String getConnectionMessage()
+	{
+		Configuration.Networking config = viewer.getConfig().networking;
+		String server = config.getServerHost() + ":" + config.getServerPort();
+		GameState gameState = viewer.getWorldModel().getGameState();
+		// in competitions, the server is restarted for the second half
+		// display a viewer-friendly message in that case to let them know why the game has
+		// "stopped"
+		if (gameState.isInitialized() && Math.abs(gameState.getTime() - gameState.getHalfTime()) < 0.1)
+			return "Waiting for second half...";
+		else if (config.autoConnect)
+			return "Trying to connect to " + server + "...";
+		else
+			return "Press C to connect to " + server + ".";
+	}
 
-    private void connect() {
-        if (!getServer().isConnected())
-            getServer().connect();
-    }
+	@Override
+	public void keyPressed(KeyEvent e)
+	{
+		super.keyPressed(e);
 
-    private void dropBall() {
-        resetTimeIfExpired();
-        getServer().dropBall();
-    }
+		switch (e.getKeyCode()) {
+		case KeyEvent.VK_X:
+			if (e.isShiftDown())
+				getServer().killServer();
+			break;
+		case KeyEvent.VK_K:
+			kickOff(true);
+			break;
+		case KeyEvent.VK_J:
+			kickOff(false);
+			break;
+		case KeyEvent.VK_O:
+			if (viewer.getWorldModel().getGameState() != null &&
+					viewer.getWorldModel().getGameState().getPlayModes() != null) {
+				openPlaymodeOverlay();
+			}
+			break;
+		case KeyEvent.VK_C:
+			connect();
+			break;
+		case KeyEvent.VK_L:
+			if (e.isShiftDown())
+				directFreeKick(true);
+			else
+				freeKick(true);
+			break;
+		case KeyEvent.VK_R:
+			if (e.isShiftDown())
+				directFreeKick(false);
+			else
+				freeKick(false);
+			break;
+		case KeyEvent.VK_T:
+			if (e.isShiftDown())
+				getServer().resetTime();
+			break;
+		case KeyEvent.VK_U:
+			getServer().requestFullState();
+			break;
+		case KeyEvent.VK_B:
+			dropBall();
+			break;
+		case KeyEvent.VK_M:
+			toggleShowServerSpeed();
+			break;
+		}
+	}
 
-    private String getConnectionMessage() {
-        Configuration.Networking config = viewer.getConfig().networking;
-        String server = config.getServerHost() + ":" + config.getServerPort();
-        GameState gameState = viewer.getWorldModel().getGameState();
-        // in competitions, the server is restarted for the second half
-        // display a viewer-friendly message in that case to let them know why the game has
-        // "stopped"
-        if (gameState.isInitialized()
-                && Math.abs(gameState.getTime() - gameState.getHalfTime()) < 0.1)
-            return "Waiting for second half...";
-        else if (config.autoConnect)
-            return "Trying to connect to " + server + "...";
-        else
-            return "Press C to connect to " + server + ".";
-    }
+	private void openPlaymodeOverlay()
+	{
+		setEnabled((GLCanvas) viewer.getCanvas(), false);
+		playmodeOverlay.setVisible(true);
+	}
 
-    @Override
-    public void keyPressed(KeyEvent e) {
-        super.keyPressed(e);
+	private void resetTimeIfExpired()
+	{
+		// changing the play mode doesn't have any effect if the game has ended
+		float gameTime = viewer.getWorldModel().getGameState().getHalfTime() * 2;
+		if (viewer.getWorldModel().getGameState().getTime() >= gameTime)
+			viewer.getNetManager().getServer().resetTime();
+	}
 
-        switch (e.getKeyCode()) {
-        case KeyEvent.VK_X:
-            if (e.isShiftDown())
-                getServer().killServer();
-            break;
-        case KeyEvent.VK_K:
-            kickOff(true);
-            break;
-        case KeyEvent.VK_J:
-            kickOff(false);
-            break;
-        case KeyEvent.VK_O:
-            if (viewer.getWorldModel().getGameState() != null
-                    && viewer.getWorldModel().getGameState().getPlayModes() != null) {
-                openPlaymodeOverlay();
-            }
-            break;
-        case KeyEvent.VK_C:
-            connect();
-            break;
-        case KeyEvent.VK_L:
-            if (e.isShiftDown())
-                directFreeKick(true);
-            else
-                freeKick(true);
-            break;
-        case KeyEvent.VK_R:
-            if (e.isShiftDown())
-                directFreeKick(false);
-            else
-                freeKick(false);
-            break;
-        case KeyEvent.VK_T:
-            if (e.isShiftDown())
-                getServer().resetTime();
-            break;
-        case KeyEvent.VK_U:
-            getServer().requestFullState();
-            break;
-        case KeyEvent.VK_B:
-            dropBall();
-            break;
-        case KeyEvent.VK_M:
-            toggleShowServerSpeed();
-            break;
-        }
-    }
+	@Override
+	public void mouseClicked(MouseEvent e)
+	{
+		if (viewer.getNetManager().getServer().isConnected()) {
+			super.mouseClicked(e);
+		}
+	}
 
-    private void openPlaymodeOverlay() {
-        setEnabled((GLCanvas) viewer.getCanvas(), false);
-        playmodeOverlay.setVisible(true);
-    }
+	@Override
+	protected boolean selectedObjectClick(ISelectable object, MouseEvent e)
+	{
+		if (e.isControlDown()) {
+			Vec3f fieldPos = viewer.getUI().getObjectPicker().pickField();
+			moveSelection(fieldPos);
+			return true;
+		}
+		return false;
+	}
 
-    private void resetTimeIfExpired() {
-        // changing the play mode doesn't have any effect if the game has ended
-        float gameTime = viewer.getWorldModel().getGameState().getHalfTime() * 2;
-        if (viewer.getWorldModel().getGameState().getTime() >= gameTime)
-            viewer.getNetManager().getServer().resetTime();
-    }
+	@Override
+	protected void altClick(MouseEvent e)
+	{
+		Vec3f fieldPos = viewer.getUI().getObjectPicker().pickField();
+		if (e.isControlDown()) {
+			pushBallTowardPosition(fieldPos, false);
+		} else if (e.isShiftDown()) {
+			pushBallTowardPosition(fieldPos, true);
+		}
+	}
 
-    @Override
-    public void mouseClicked(MouseEvent e) {
-        if (viewer.getNetManager().getServer().isConnected()) {
-            super.mouseClicked(e);
-        }
-    }
+	private void moveSelection(Vec3f pos)
+	{
+		if (pos == null)
+			return;
+		ISelectable selected = viewer.getWorldModel().getSelectedObject();
+		pos.y = selected.getBoundingBox().getCenter().y + 0.1f;
+		Vec3f serverPos = WorldModel.COORD_TFN.transform(pos);
 
-    @Override
-    protected boolean selectedObjectClick(ISelectable object, MouseEvent e) {
-        if (e.isControlDown()) {
-            Vec3f fieldPos = viewer.getUI().getObjectPicker().pickField();
-            moveSelection(fieldPos);
-            return true;
-        }
-        return false;
-    }
+		if (selected instanceof Ball) {
+			serverPos.z = viewer.getWorldModel().getGameState().getBallRadius();
+			viewer.getNetManager().getServer().moveBall(serverPos);
+		} else if (selected instanceof Agent) {
+			Agent a = (Agent) selected;
+			boolean leftTeam = a.getTeam().getID() == Team.LEFT;
+			viewer.getNetManager().getServer().moveAgent(serverPos, leftTeam, a.getID());
+		}
+	}
 
-    @Override
-    protected void altClick(MouseEvent e) {
-        Vec3f fieldPos = viewer.getUI().getObjectPicker().pickField();
-        if (e.isControlDown()) {
-            pushBallTowardPosition(fieldPos, false);
-        } else if (e.isShiftDown()) {
-            pushBallTowardPosition(fieldPos, true);
-        }
-    }
+	private void pushBallTowardPosition(Vec3f pos, boolean fAir)
+	{
+		if (pos == null)
+			return;
 
-    private void moveSelection(Vec3f pos) {
-        if (pos == null)
-            return;
-        ISelectable selected = viewer.getWorldModel().getSelectedObject();
-        pos.y = selected.getBoundingBox().getCenter().y + 0.1f;
-        Vec3f serverPos = WorldModel.COORD_TFN.transform(pos);
+		Vec3f targetPos = WorldModel.COORD_TFN.transform(pos);
+		Vec3f ballPos = WorldModel.COORD_TFN.transform(viewer.getWorldModel().getBall().getPosition());
+		ballPos.z = viewer.getWorldModel().getGameState().getBallRadius();
+		Vec3f vel;
+		float xDiff = targetPos.x - ballPos.x;
+		float yDiff = targetPos.y - ballPos.y;
+		float xyDist = (float) Math.sqrt(xDiff * xDiff + yDiff * yDiff);
+		if (fAir) {
+			final float AIR_XY_POWER_FACTOR =
+					(float) Math.sqrt(9.81 * xyDist * (.82 + .022 * xyDist)); // with no drag =
+																			  // (float)Math.sqrt(9.81*xyDist/2);
+			final float Z_POWER = AIR_XY_POWER_FACTOR;
+			vel = new Vec3f((float) Math.cos(Math.atan2(yDiff, xDiff)) * AIR_XY_POWER_FACTOR,
+					(float) Math.sin(Math.atan2(yDiff, xDiff)) * AIR_XY_POWER_FACTOR, Z_POWER);
+		} else {
+			final float GROUND_XY_POWER_FACTOR = 1.475f;
+			vel = new Vec3f(xDiff * GROUND_XY_POWER_FACTOR, yDiff * GROUND_XY_POWER_FACTOR, 0.0f);
+		}
+		viewer.getNetManager().getServer().moveBall(ballPos, vel);
+	}
 
-        if (selected instanceof Ball) {
-            serverPos.z = viewer.getWorldModel().getGameState().getBallRadius();
-            viewer.getNetManager().getServer().moveBall(serverPos);
-        } else if (selected instanceof Agent) {
-            Agent a = (Agent) selected;
-            boolean leftTeam = a.getTeam().getID() == Team.LEFT;
-            viewer.getNetManager().getServer().moveAgent(serverPos, leftTeam, a.getID());
-        }
+	@Override
+	public void connectionChanged(ServerComm server)
+	{
+		connectionOverlay.setMessage(getConnectionMessage());
+		connectionOverlay.setVisible(!server.isConnected());
+		if (server.isConnected()) {
+			viewer.getWorldModel().setSelectedObject(viewer.getWorldModel().getBall());
+		} else {
+			playmodeOverlay.setVisible(false);
+			prevScoreL = -1;
+			prevScoreR = -1;
+		}
+	}
 
-    }
+	@Override
+	public void gsPlayStateChanged(GameState gs)
+	{
+		super.gsPlayStateChanged(gs);
 
-    private void pushBallTowardPosition(Vec3f pos, boolean fAir) {
-        if (pos == null)
-            return;
+		if (gs.hasPlayModeJustChanged()) {
+			switch (gs.getPlayMode()) {
+			case GameState.KICK_OFF_LEFT:
+			case GameState.KICK_OFF_RIGHT:
+				getServer().requestFullState();
+				break;
+			}
 
-        Vec3f targetPos = WorldModel.COORD_TFN.transform(pos);
-        Vec3f ballPos = WorldModel.COORD_TFN
-                .transform(viewer.getWorldModel().getBall().getPosition());
-        ballPos.z = viewer.getWorldModel().getGameState().getBallRadius();
-        Vec3f vel;
-        float xDiff = targetPos.x - ballPos.x;
-        float yDiff = targetPos.y - ballPos.y;
-        float xyDist = (float) Math.sqrt(xDiff * xDiff + yDiff * yDiff);
-        if (fAir) {
-            final float AIR_XY_POWER_FACTOR = (float) Math
-                    .sqrt(9.81 * xyDist * (.82 + .022 * xyDist)); // with no drag =
-                                                                  // (float)Math.sqrt(9.81*xyDist/2);
-            final float Z_POWER = AIR_XY_POWER_FACTOR;
-            vel = new Vec3f((float) Math.cos(Math.atan2(yDiff, xDiff)) * AIR_XY_POWER_FACTOR,
-                    (float) Math.sin(Math.atan2(yDiff, xDiff)) * AIR_XY_POWER_FACTOR, Z_POWER);
-        } else {
-            final float GROUND_XY_POWER_FACTOR = 1.475f;
-            vel = new Vec3f(xDiff * GROUND_XY_POWER_FACTOR, yDiff * GROUND_XY_POWER_FACTOR, 0.0f);
-        }
-        viewer.getNetManager().getServer().moveBall(ballPos, vel);
-
-    }
-
-    @Override
-    public void connectionChanged(ServerComm server) {
-        connectionOverlay.setMessage(getConnectionMessage());
-        connectionOverlay.setVisible(!server.isConnected());
-        if (server.isConnected()) {
-            viewer.getWorldModel().setSelectedObject(viewer.getWorldModel().getBall());
-        } else {
-            playmodeOverlay.setVisible(false);
-            prevScoreL = -1;
-            prevScoreR = -1;
-        }
-    }
+			if (gs.getPlayMode().equals(GameState.GAME_OVER)) {
+				connectionOverlay.setMessage(String.format("Half Over, %s %d:%d %s", gs.getUIStringTeamLeft(),
+						gs.getScoreLeft(), gs.getScoreRight(), gs.getUIStringTeamRight()));
+				connectionOverlay.setVisible(true);
+			} else {
+				connectionOverlay.setVisible(false);
+			}
+		}
+	}
 }

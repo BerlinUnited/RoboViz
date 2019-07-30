@@ -1,4 +1,5 @@
 language: java
+dist: xenial
 
 script:
   - cd scripts
@@ -16,7 +17,7 @@ before_deploy:
 deploy:
   provider: releases
   api_key:
-    secure: En83qH7a/C0CwVucHZA6YO+7Pok2uWGVIdhjt3jQb7ymWuCfo9F6Cx+5fDgPoLmKpqXQpT896WySWbdx+mNSjomDsXd8ilSAkYFFeglfaBsIELrDRdMmYdQ9/4xyu0vSRCuQ5ji2b1nVJ9I7gQbkz1cmQcFTshyHLVCvPkjbDWk=
+    secure: nM54n+YgSHV/HqJ882cF1pumzji/yD0HsNYwof+Yy+wS1l6wWEBXPp6mdIGuspr9IfByHyBe1ep11SBhteiSy73X96JsKp3WUpMBoeoyNey/Bgbh7qa3Yy/ikJj68Arjl1DdCOlKjp5JIPGtKsBHxT29qFMSltxtGQ6AwV8WJYo=
   file:
     - linux32.tar.gz
     - linux64.tar.gz

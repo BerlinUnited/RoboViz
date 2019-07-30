@@ -35,164 +35,197 @@ import rv.world.WorldModel;
 /**
  * A single RoboCup agent. This object contains references to all the mesh parts for a specific
  * agent in the simulation. It maintains a bounding box for all the parts, collectively.
- * 
+ *
  * @author Justin Stoecker
  */
-public class Agent implements ISelectable {
+public class Agent implements ISelectable
+{
+	public interface ChangeListener {
+		void transformChanged(Matrix headTransform);
+	}
 
-    public interface ChangeListener {
-        void transformChanged(Matrix headTransform);
-    }
+	private final List<ChangeListener> listeners = new ArrayList<>();
+	private final List<StaticMeshNode> meshNodes;
+	private BoundingBox bounds;
+	private final ContentManager content;
+	private final Team team;
+	private final int id;
+	private boolean selected = false;
+	private Matrix headTransform;
 
-    private final List<ChangeListener> listeners      = new ArrayList<>();
-    private final List<StaticMeshNode> meshNodes;
-    private BoundingBox                bounds;
-    private final ContentManager       content;
-    private final Team                 team;
-    private final int                  id;
-    private boolean                    selected       = false;
-    private Matrix                     headTransform;
+	private Vec3f headCenter;
+	private Vec3f headDirection;
 
-    private Vec3f                      headCenter;
-    private Vec3f                      headDirection;
+	private AgentAnnotation annotation = null;
+	private Vec3f torsoDirection = null;
 
-    private AgentAnnotation            annotation     = null;
-    private Vec3f                      torsoDirection = null;
+	private int age;
 
-    public void setAnnotation(AgentAnnotation annotation) {
-        this.annotation = annotation;
-    }
+	public void setAnnotation(AgentAnnotation annotation)
+	{
+		this.annotation = annotation;
+	}
 
-    public AgentAnnotation getAnnotation() {
-        return annotation;
-    }
+	public AgentAnnotation getAnnotation()
+	{
+		return annotation;
+	}
 
-    public Matrix getHeadTransform() {
-        return headTransform;
-    }
+	public Matrix getHeadTransform()
+	{
+		return headTransform;
+	}
 
-    public Vec3f getHeadCenter() {
-        return headCenter;
-    }
+	public Vec3f getHeadCenter()
+	{
+		return headCenter;
+	}
 
-    public Vec3f getHeadDirection() {
-        return headDirection;
-    }
+	public Vec3f getHeadDirection()
+	{
+		return headDirection;
+	}
 
-    public Vec3f getTorsoDirection() {
-        return torsoDirection;
-    }
+	public Vec3f getTorsoDirection()
+	{
+		return torsoDirection;
+	}
 
-    /**
-     * Returns the agent's ID number with the first agent on a team having ID 1
-     */
-    public int getID() {
-        return id;
-    }
+	/**
+	 * Returns the agent's ID number with the first agent on a team having ID 1
+	 */
+	public int getID()
+	{
+		return id;
+	}
 
-    /**
-     * Returns a reference to the team the agent belongs to
-     */
-    public Team getTeam() {
-        return team;
-    }
+	/**
+	 * Returns a reference to the team the agent belongs to
+	 */
+	public Team getTeam()
+	{
+		return team;
+	}
 
-    public void addChangeListener(ChangeListener l) {
-        listeners.add(l);
-    }
+	public void addChangeListener(ChangeListener l)
+	{
+		listeners.add(l);
+	}
 
-    public void removeChangeListener(ChangeListener l) {
-        listeners.remove(l);
-    }
+	public void removeChangeListener(ChangeListener l)
+	{
+		listeners.remove(l);
+	}
 
-    public Agent(Team team, int id, Node rootNode, SceneGraph sg, ContentManager cm) {
-        this.team = team;
-        this.id = id;
-        this.content = cm;
+	public Agent(Team team, int id, Node rootNode, SceneGraph sg, ContentManager cm)
+	{
+		this.team = team;
+		this.id = id;
+		this.content = cm;
 
-        meshNodes = sg.getAllMeshNodes(rootNode);
-    }
+		meshNodes = sg.getAllMeshNodes(rootNode);
 
-    /**
-     * Grabs model matrices from scene graph and updates bounding box
-     */
-    public void update(SceneGraph sg) {
-        Vec3f min = new Vec3f(Float.POSITIVE_INFINITY);
-        Vec3f max = new Vec3f(Float.NEGATIVE_INFINITY);
+		for (StaticMeshNode node : meshNodes) {
+			// Check for switching models to goalie jersey
+			if ((node.getName().matches(".*naobody.*[.]obj$") || node.getName().matches(".*lupperarm.*[.]obj$") ||
+						node.getName().matches(".*rupperarm.*[.]obj$")) &&
+					!node.getName().endsWith("G.obj") && id == 1) {
+				node.setName(node.getName().substring(0, node.getName().length() - 4) + "G.obj");
+			}
+		}
+	}
 
-        for (StaticMeshNode node : meshNodes) {
-            Model model = content.getModel(node.getName());
-            if (model.isLoaded()) {
-                Vec3f[] corners = model.getMesh().getBounds().getCorners();
-                Matrix modelMat = WorldModel.COORD_TFN.times(node.getWorldTransform());
+	/**
+	 * Grabs model matrices from scene graph and updates bounding box
+	 */
+	public void update(SceneGraph sg)
+	{
+		Vec3f min = new Vec3f(Float.POSITIVE_INFINITY);
+		Vec3f max = new Vec3f(Float.NEGATIVE_INFINITY);
 
-                // store head transformation for "robot perspective" camera mode
-                if (node.getName().endsWith("head.obj")) {
-                    headTransform = modelMat;
-                    headCenter = headTransform.transform(new Vec3f(0));
-                    headDirection = headTransform.transform(new Vec3f(0, 0, 1)).minus(headCenter)
-                            .normalize();
-                } else if (node.getName().matches(".*body[0-9]*[.]obj$")) {
-                    // Store body direction for third person view
-                    Matrix bodyRot = modelMat;
-                    Vec3f bodyCenter = bodyRot.transform(new Vec3f(0));
-                    torsoDirection = bodyRot.transform(new Vec3f(0, 0, 1)).minus(bodyCenter)
-                            .normalize();
-                }
+		for (StaticMeshNode node : meshNodes) {
+			Model model = content.getModel(node.getName());
+			if (model.isLoaded()) {
+				Vec3f[] corners = model.getMesh().getBounds().getCorners();
+				Matrix modelMat = WorldModel.COORD_TFN.times(node.getWorldTransform());
 
-                for (int j = 0; j < 8; j++) {
-                    Vec3f v = modelMat.transform(corners[j]);
-                    if (v.x < min.x)
-                        min.x = v.x;
-                    if (v.y < min.y)
-                        min.y = v.y;
-                    if (v.z < min.z)
-                        min.z = v.z;
-                    if (v.x > max.x)
-                        max.x = v.x;
-                    if (v.y > max.y)
-                        max.y = v.y;
-                    if (v.z > max.z)
-                        max.z = v.z;
-                }
-            }
-        }
+				// store head transformation for "robot perspective" camera mode
+				if (node.getName().endsWith("head.obj")) {
+					headTransform = modelMat;
+					headCenter = headTransform.transform(new Vec3f(0));
+					headDirection = headTransform.transform(new Vec3f(0, 0, 1)).minus(headCenter).normalize();
+				} else if (node.getName().matches(".*body.*[.]obj$")) {
+					// Store body direction for third person view
+					Matrix bodyRot = modelMat;
+					Vec3f bodyCenter = bodyRot.transform(new Vec3f(0));
+					torsoDirection = bodyRot.transform(new Vec3f(0, 0, 1)).minus(bodyCenter).normalize();
+				}
 
-        bounds = new BoundingBox(min, max);
-        for (ChangeListener l : listeners)
-            l.transformChanged(headTransform);
-    }
+				for (int j = 0; j < 8; j++) {
+					Vec3f v = modelMat.transform(corners[j]);
+					if (v.x < min.x)
+						min.x = v.x;
+					if (v.y < min.y)
+						min.y = v.y;
+					if (v.z < min.z)
+						min.z = v.z;
+					if (v.x > max.x)
+						max.x = v.x;
+					if (v.y > max.y)
+						max.y = v.y;
+					if (v.z > max.z)
+						max.z = v.z;
+				}
+			}
+		}
 
-    @Override
-    public Vec3f getPosition() {
-        return bounds == null ? null : bounds.getCenter();
-    }
+		bounds = new BoundingBox(min, max);
+		for (ChangeListener l : listeners)
+			l.transformChanged(headTransform);
 
-    @Override
-    public BoundingBox getBoundingBox() {
-        return bounds;
-    }
+		age++;
+	}
 
-    @Override
-    public void setSelected(boolean selected) {
-        this.selected = selected;
-    }
+	@Override
+	public Vec3f getPosition()
+	{
+		return bounds == null ? null : bounds.getCenter();
+	}
 
-    @Override
-    public boolean isSelected() {
-        return selected;
-    }
+	public int getAge()
+	{
+		return age;
+	}
 
-    @Override
-    public void renderSelected(GL2 gl) {
-        if (getPosition() != null) {
-            ContentManager.renderSelection(gl, getPosition(), 0.25f,
-                    team.getTeamMaterial().getDiffuse());
-        }
-    }
+	@Override
+	public BoundingBox getBoundingBox()
+	{
+		return bounds;
+	}
 
-    /** Returns identifier for agent based on team and ID (ex. L.1 for left 1) */
-    public String getShortName() {
-        return String.format("%c.%d", (team.getID() == Team.LEFT) ? 'L' : 'R', id);
-    }
+	@Override
+	public void setSelected(boolean selected)
+	{
+		this.selected = selected;
+	}
+
+	@Override
+	public boolean isSelected()
+	{
+		return selected;
+	}
+
+	@Override
+	public void renderSelected(GL2 gl)
+	{
+		if (getPosition() != null) {
+			ContentManager.renderSelection(gl, getPosition(), 0.25f, team.getColorMaterial().getDiffuse(), 1, false);
+		}
+	}
+
+	/** Returns identifier for agent based on team and ID (ex. L.1 for left 1) */
+	public String getShortName()
+	{
+		return String.format("%c.%d", (team.getID() == Team.LEFT) ? 'L' : 'R', id);
+	}
 }

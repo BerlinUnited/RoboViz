@@ -1,4 +1,39 @@
-1.3.0
+1.6.1 (June 17, 2019)
+------------------------------
+* added support for the rectangular goals in rcssserver 0.7.2
+* updated the pass mode duration for rcssserver 0.7.2
+
+1.6.0 (May 1, 2019)
+------------------------------
+* updated the required Java version to 1.8
+* added a fade-out effect to the ball circle in pass mode etc.
+* added a workaround for goals sometimes being missed (#104)
+* added an overlay text and a gray-out effect when in `GameOver`
+* changed the default config to enable all overlays as in competitions
+* removed red cards from the foul overlay to avoid confusion
+* removed the "Fouls:" headline from the foul overlay
+
+1.5.0 (April 27, 2019)
+------------------------------
+* added differently colored goalie jerseys (#102)
+* added a player tracking camera
+* added support for the new self collision foul
+* added a circle around the ball for pass / free kick / corner kick / kick in
+* added a timer for the scoring cooldown after pass mode 
+* changed the time formatting to `mm:ss`
+* more gracefully handle `NaN` values sent by the server (#99)
+* fixed hangs when switching between servers in Connection UI (#100)
+* fixed `config.txt` changes made while RoboViz is running being lost on save
+
+1.4.0 (April 12, 2018)
+------------------------------
+* added a menu bar with Connection / Server / View / Camera menus
+* allowed specifying multiple servers in `config.txt` (comma-separated)
+* allowed switching between different servers without restarting RoboViz
+* fixed handling of packets with multiple drawings in logs (#98)
+* changed the ball tracker camera's speed to scale with ball speed (#95)
+ 
+1.3.0 (July 29, 2016)
 ------------------------------
 * server speed and foul overlay are now visible by default
 * the ball is now selected by default when connecting
@@ -11,11 +46,11 @@
 * changed the color format in `config.txt` to 0xRRGGBB
 * the default colors of the left and right team are now configurable
 
-1.2.0
+1.2.0 (May 27, 2016)
 ------------------------------
 * fixed the log player getting stuck with draw commands occasionally (#78)
 * fixed `--logFile` paths starting with `~` in `roboviz.sh` (#80)
-* fixed the server host displayed in the window title when overriden with `--serverHost` (#83)
+* fixed the server host displayed in the window title when overridden with `--serverHost` (#83)
 * changed the connection overlay text from `Trying to connect to <ip>...` to `Waiting for second half...` if time is at 300
 * changed the connection overlay text to dynamically resize with the window
 * changed the the "reset time" shortcut (`Shift+R`) to `Shift+T` (#85)
@@ -24,14 +59,14 @@
 * added support for using `~/.roboviz/config.txt` instead of the local `config.txt` if present
 * added the RoboViz version to the window title
 
-1.1.2
+1.1.2 (March 20, 2016)
 ------------------------------
 * fixed drawing of annotations in different robot vantages
 * fixed incorrect shadow rendering near field corners
 * adjusted .sh start scripts so they can run from any directory
 * added current server IP / logfile path to window title
 
-1.1.1
+1.1.1 (June 17, 2015)
 ------------------------------
 
 * fixed third person robot vantage not working with new robot models
@@ -44,7 +79,7 @@
 * fixed draw commands including agent IDs to use to use the agent's uniform number instead of the index in the current team array
 * fixed agent annotations being discarded after scene graph changes
 
-1.1.0
+1.1.0 (June 13, 2015)
 ------------------------------
 
 *Note: Java 7 is required to compile RoboViz now, whereas the version on the SourceForge repository works with Java 6.*
@@ -52,13 +87,13 @@
 * Unified Log Mode and Live Mode - Log Mode now has the same features and shortcuts as Live Mode, except for a few necessary restrictions (server commands and drawings)
 * **Log Player:**
 	* fixed another Logplayer window being created when dragging RoboViz to a different monitor on Linux
-	* added a separate thread for log playback to prevent the UI from freezing when jumping a lot of frames (especially noticable with the slider)
+	* added a separate thread for log playback to prevent the UI from freezing when jumping a lot of frames (especially noticeable with the slider)
 	* added a "Jump to previous / next" goal feature (a separate thread analyzes the logfile in the background to find goals, so the functionality is not available right away)
 	* playback speed is now determined by a factor instead of FPS
 	* negative playback speeds are now allowed
 	* replace the decrease / increase playback speed buttons with a spinner
 	* fixed playback being slightly too fast (150ms per frame instead of 200ms)
-	* the "ms per frame"-value is now extracted from the logfile, making it so that the playback speed is independant of the `$monitorLoggerStep` value of the server config while recording it
+	* the "ms per frame"-value is now extracted from the logfile, making it so that the playback speed is independent of the `$monitorLoggerStep` value of the server config while recording it
 	* removed the progress slider from the RoboViz main window
 	* fixed score / team colors / names etc. not being reset properly when switching logfiles
 * **Shortcuts:**

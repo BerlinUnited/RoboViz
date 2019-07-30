@@ -59,7 +59,7 @@ import rv.world.WorldModel;
 abstract public class Viewer extends GLProgram
         implements GLEventListener, ServerComm.ServerChangeListener, LogPlayer.StateChangeListener {
 
-    private static final String VERSION = "1.3.0";
+    private static final String VERSION = "1.6.1";
 
     public enum Mode {
         LOGFILE, LIVE,
@@ -316,4 +316,3 @@ abstract public class Viewer extends GLProgram
     }
 
     abstract public MenuBar getMenu();
-}

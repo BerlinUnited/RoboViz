@@ -22,98 +22,130 @@ import js.math.vector.Vec2f;
 import js.math.vector.Vec3f;
 import rv.comm.rcssserver.GameState;
 import rv.world.ISelectable;
+import rv.world.objects.Agent;
+import rv.world.objects.Ball;
 
-public class TargetTrackerCamera {
+public class TargetTrackerCamera
+{
+	private boolean enabled = false;
+	private final FPCamera camera;
+	private GameState gs;
 
-    private boolean        enabled       = false;
-    private final FPCamera camera;
-    private GameState      gs;
-    private ISelectable    target;
-    private double         playbackSpeed = 1;
-    private Vec3f          lastScreenPos;
+	private ISelectable target;
+	private double playbackSpeed = 1;
+	private Vec3f lastScreenPos;
 
-    public void toggleEnabled() {
-        enabled = !enabled;
-    }
+	public boolean isEnabled()
+	{
+		return enabled;
+	}
 
-    public void setPlaybackSpeed(double playbackSpeed) {
-        this.playbackSpeed = playbackSpeed;
-    }
+	public void setEnabled(boolean enabled)
+	{
+		this.enabled = enabled;
+	}
 
-    public TargetTrackerCamera(ISelectable target, FPCamera camera, GameState gs) {
-        this.target = target;
-        this.camera = camera;
-        this.gs = gs;
-        lastScreenPos = null;
-    }
+	public ISelectable getTarget()
+	{
+		return target;
+	}
 
-    public void update(Viewport screen) {
-        if (!enabled || target.getPosition() == null)
-            return;
+	public void setTarget(ISelectable target)
+	{
+		this.target = target;
+	}
 
-        float scale = (float) (1 - (0.02f * playbackSpeed));
-        scale = scaleWithBallSpeed(screen, scale);
+	public void setPlaybackSpeed(double playbackSpeed)
+	{
+		this.playbackSpeed = playbackSpeed;
+	}
 
-        Vec3f cameraTarget = offsetTargetPosition(target.getPosition());
+	public TargetTrackerCamera(FPCamera camera, GameState gs)
+	{
+		this.camera = camera;
+		this.gs = gs;
+		lastScreenPos = null;
+	}
 
-        camera.setPosition(Vec3f.lerp(cameraTarget, camera.getPosition(), scale));
-        camera.setRotation(new Vec2f(-30, 180));
-    }
+	public void update(Viewport screen)
+	{
+		if (!enabled || target == null || target.getPosition() == null)
+			return;
 
-    private float scaleWithBallSpeed(Viewport screen, float scale) {
-        // Get position of target relative to screen
-        Vec3f screenPos = camera.project(target.getPosition(), screen);
+		float scale = (float) (1 - (0.02f * playbackSpeed));
+		if (target instanceof Agent) {
+			scale = 0.95f;
+		} else {
+			scale = scaleWithBallSpeed(screen, scale);
+		}
 
-        if (lastScreenPos == null) {
-            lastScreenPos = screenPos;
-        }
+		Vec3f cameraTarget = offsetTargetPosition(target.getPosition());
 
-        // Maximum factor that velocity can increase scale by
-        float VEL_SCALE_FACTOR_MAX = 3.0f;
+		camera.setPosition(Vec3f.lerp(cameraTarget, camera.getPosition(), scale));
+		camera.setRotation(new Vec2f(-30, 180));
+	}
 
-        // Amount that screen velocity is multiplied by when determining scale
-        float VEL_SCALE_FACTOR = 0.003f;
+	private float scaleWithBallSpeed(Viewport screen, float scale)
+	{
+		// Get position of target relative to screen
+		Vec3f screenPos = camera.project(target.getPosition(), screen);
 
-        double screenVel = Math.sqrt(Math.pow((double) (lastScreenPos.x - screenPos.x), 2.0)
-                + Math.pow((double) (lastScreenPos.y - screenPos.y), 2.0));
-        scale = (float) Math.max(Math.min(1 - screenVel * VEL_SCALE_FACTOR, scale),
-                1 - (0.02f * playbackSpeed * VEL_SCALE_FACTOR_MAX));
-        lastScreenPos = screenPos;
+		if (lastScreenPos == null) {
+			lastScreenPos = screenPos;
+		}
 
-        return scale;
-    }
+		// Maximum factor that velocity can increase scale by
+		float VEL_SCALE_FACTOR_MAX = 3.0f;
 
-    /**
-     * Tries to keep the ball in the middle of the screen (unless we're near a field edge, then it
-     * shifts the position a bit to fill as much of the screen with the field as possible)
-     */
-    private Vec3f offsetTargetPosition(Vec3f targetPos) {
-        float halfLength = gs.getFieldLength() / 2;
-        float halfWidth = gs.getFieldWidth() / 2;
+		// Amount that screen velocity is multiplied by when determining scale
+		float VEL_SCALE_FACTOR = 0.003f;
 
-        float xOffset = 4 * fuzzyValue(targetPos.x, -halfLength, halfLength);
-        float zOffset = -8 + 3 * fuzzyValue(targetPos.z, -halfWidth, halfWidth);
+		double screenVel = Math.sqrt(Math.pow((double) (lastScreenPos.x - screenPos.x), 2.0) +
+									 Math.pow((double) (lastScreenPos.y - screenPos.y), 2.0));
+		scale = (float) Math.max(
+				Math.min(1 - screenVel * VEL_SCALE_FACTOR, scale), 1 - (0.02f * playbackSpeed * VEL_SCALE_FACTOR_MAX));
+		lastScreenPos = screenPos;
 
-        Vec3f offsetPos = targetPos.clone();
-        offsetPos.add(Vec3f.unitX().times(xOffset));
-        offsetPos.add(Vec3f.unitY().times(4));
-        offsetPos.add(Vec3f.unitZ().times(zOffset));
-        return offsetPos;
-    }
+		return scale;
+	}
 
-    private float fuzzyValue(float value, float lower, float upper) {
-        if (value <= lower)
-            return 1;
-        if (value >= upper)
-            return 0;
-        return weight(1 - ((value - lower) / (upper - lower)));
-    }
+	/**
+	 * Tries to keep the ball in the middle of the screen (unless we're near a field edge, then it
+	 * shifts the position a bit to fill as much of the screen with the field as possible)
+	 */
+	private Vec3f offsetTargetPosition(Vec3f targetPos)
+	{
+		float halfLength = gs.getFieldLength() / 2;
+		float halfWidth = gs.getFieldWidth() / 2;
 
-    /** maps t values from 0...1 to -1...1 using a quadratic function */
-    private float weight(float t) {
-        float result = (float) -(Math.sqrt(1 - Math.pow(2 * t - 1, 2)) - 1);
-        if (t < 0.5)
-            result *= -1;
-        return result;
-    }
+		float zoom = target instanceof Ball ? 1 : 4;
+
+		float xOffset = 4 * fuzzyValue(targetPos.x, -halfLength, halfLength);
+		float baseZOffset = -8 / zoom;
+		float zOffset = baseZOffset + 3 * fuzzyValue(targetPos.z, -halfWidth, halfWidth);
+
+		Vec3f offsetPos = targetPos.clone();
+		offsetPos.add(Vec3f.unitX().times(xOffset));
+		offsetPos.add(Vec3f.unitY().times(4 / zoom));
+		offsetPos.add(Vec3f.unitZ().times(zOffset));
+		return offsetPos;
+	}
+
+	private float fuzzyValue(float value, float lower, float upper)
+	{
+		if (value <= lower)
+			return 1;
+		if (value >= upper)
+			return 0;
+		return weight(1 - ((value - lower) / (upper - lower)));
+	}
+
+	/** maps t values from 0...1 to -1...1 using a quadratic function */
+	private float weight(float t)
+	{
+		float result = (float) -(Math.sqrt(1 - Math.pow(2 * t - 1, 2)) - 1);
+		if (t < 0.5)
+			result *= -1;
+		return result;
+	}
 }
