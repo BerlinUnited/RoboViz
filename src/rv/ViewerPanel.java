@@ -17,7 +17,7 @@ import rv.ui.menus.MenuBar;
 public class ViewerPanel extends Viewer
         implements GLEventListener
 {
-    private static final String VERSION = "1.3.0";
+    private static final String VERSION = "1.6.1";
     
     private JFrame          parent;
     private JPanel          panel;

@@ -50,7 +50,7 @@ import rv.util.commandline.StringArgument;
 public class ViewerFrame extends Viewer
         implements GLEventListener, ServerComm.ServerChangeListener, LogPlayer.StateChangeListener {
 
-    private static final String VERSION = "1.3.0";
+    private static final String VERSION = "1.6.1";
 
     private RVFrame                          frame;
     private boolean                          movedFrame;
@@ -61,11 +61,7 @@ public class ViewerFrame extends Viewer
         final GLCapabilities caps = determineGLCapabilities(config);
 
         final String[] arguments = args;
-        SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-                new ViewerFrame(config, caps, arguments);
-            }
-        });
+        SwingUtilities.invokeLater(() -> new ViewerFrame(config, caps, arguments));
     }
 
     public ViewerFrame(Configuration config, GLCapabilities caps, String[] args) {
@@ -78,16 +74,16 @@ public class ViewerFrame extends Viewer
     }
 
     private void parseArgs(String[] args) {
-        StringArgument LOG_FILE = new StringArgument("logFile", null);
-        BooleanArgument LOG_MODE = new BooleanArgument("logMode");
-        StringArgument SERVER_HOST = new StringArgument("serverHost", null);
-        IntegerArgument SERVER_PORT = new IntegerArgument("serverPort", null, 1, 65535);
-        StringArgument DRAWING_FILTER = new StringArgument("drawingFilter", ".*");
+        StringArgument logFileArgument = new StringArgument("logFile", null);
+        BooleanArgument logModeArgument = new BooleanArgument("logMode");
+        StringArgument serverHostArgument = new StringArgument("serverHost", null);
+        IntegerArgument serverPortArgument = new IntegerArgument("serverPort", null, 1, 65535);
+        StringArgument drawingFilterArgument = new StringArgument("drawingFilter", ".*");
 
-        handleLogModeArgs(LOG_FILE.parse(args), LOG_MODE.parse(args));
-        config.networking.overrideServerHost(SERVER_HOST.parse(args));
-        config.networking.overrideServerPort(SERVER_PORT.parse(args));
-        drawingFilter = DRAWING_FILTER.parse(args);
+        handleLogModeArgs(logFileArgument.parse(args), logModeArgument.parse(args));
+        config.networking.overrideServerHost(serverHostArgument.parse(args));
+        config.networking.overrideServerPort(serverPortArgument.parse(args));
+        drawingFilter = drawingFilterArgument.parse(args);
         Argument.endParse(args);
     }
 
@@ -143,8 +139,8 @@ public class ViewerFrame extends Viewer
 
     private void restoreConfig() {
         Configuration.Graphics graphics = config.graphics;
-        Integer frameX = graphics.frameX;
-        Integer frameY = graphics.frameY;
+        int frameX = graphics.frameX;
+        int frameY = graphics.frameY;
         boolean maximized = graphics.isMaximized;
 
         frame.setSize(graphics.frameWidth, graphics.frameHeight);
@@ -164,7 +160,9 @@ public class ViewerFrame extends Viewer
         System.exit(0);
     }
 
-    private void storeConfig() {
+    private void storeConfig()
+    {
+        Configuration config = Configuration.loadFromFile();
         Configuration.Graphics graphics = config.graphics;
         Point location = frame.getLocation();
         Dimension size = frame.getSize();
