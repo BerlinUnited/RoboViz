@@ -65,13 +65,13 @@ public class DrawComm
 					socket.receive(packet);
 					handle(packet);
 				} catch (IOException e) {
-                    // only if we're still running; otherwise we would produce 
-                    // print outs when we're "enforcing" shutdown!
-                    if(running) {
+					// only if we're still running; otherwise we would produce
+					// print outs when we're "enforcing" shutdown!
+					if (running) {
 						e.printStackTrace();
 					}
 				}
-            }
+			}
 			if (socket != null)
 				socket.close();
 		}
@@ -144,11 +144,12 @@ public class DrawComm
 	public void shutdown()
 	{
 		packetReceiver.running = false;
-        // enforce closing, otherwise it gets blocked by "receive()"!
-        packetReceiver.socket.close();
-        try {
-            packetReceiver.join();
-        } catch (InterruptedException ex) { /* ignore */ }
+		// enforce closing, otherwise it gets blocked by "receive()"!
+		packetReceiver.socket.close();
+		try {
+			packetReceiver.join();
+		} catch (InterruptedException ex) { /* ignore */
+		}
 	}
 
 	/** Prints packet contents for debug purposes */

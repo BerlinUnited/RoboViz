@@ -46,10 +46,10 @@ public class Configuration
 		String userConfig = System.getProperty("user.home") + "/.roboviz/" + CONFIG_FILE_NAME;
 		if (new File(userConfig).exists())
 			return userConfig;
-        URL t;
-        if((t = Configuration.class.getClassLoader().getResource(CONFIG_FILE_NAME)) != null) {
-            return t.getFile();
-        }
+		URL t;
+		if ((t = Configuration.class.getClassLoader().getResource(CONFIG_FILE_NAME)) != null) {
+			return t.getFile();
+		}
 		return CONFIG_FILE_NAME;
 	}
 

@@ -22,13 +22,13 @@ public class ControlsHelpPanel extends FramePanelBase
 		String file = "Could not load help page.";
 		List<String> lines = null;
 		try {
-            File controls = new File(ControlsHelpPanel.class.getClassLoader().getResource("resources/help/controls.html").toURI());
-			lines = Files.readAllLines(controls.toPath(),
-                    StandardCharsets.UTF_8);
+			File controls = new File(
+					ControlsHelpPanel.class.getClassLoader().getResource("resources/help/controls.html").toURI());
+			lines = Files.readAllLines(controls.toPath(), StandardCharsets.UTF_8);
 		} catch (IOException e) {
 			e.printStackTrace();
-        } catch (URISyntaxException ex) {
-            ex.printStackTrace();
+		} catch (URISyntaxException ex) {
+			ex.printStackTrace();
 		}
 
 		if (lines != null) {

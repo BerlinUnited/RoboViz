@@ -44,201 +44,219 @@ import rv.util.commandline.StringArgument;
 /**
  * Program entry point / main class. Creates a window and delegates OpenGL rendering the Renderer
  * object.
- * 
+ *
  * @author Justin Stoecker
  */
-public class ViewerFrame extends Viewer
-        implements GLEventListener, ServerComm.ServerChangeListener, LogPlayer.StateChangeListener {
+public class ViewerFrame
+		extends Viewer implements GLEventListener, ServerComm.ServerChangeListener, LogPlayer.StateChangeListener
+{
+	private static final String VERSION = "1.6.1";
 
-    private static final String VERSION = "1.6.1";
+	private RVFrame frame;
+	private boolean movedFrame;
 
-    private RVFrame                          frame;
-    private boolean                          movedFrame;
+	public static void main(String[] args)
+	{
+		final Configuration config = Configuration.loadFromFile();
 
-    public static void main(String[] args) {
-        final Configuration config = Configuration.loadFromFile();
+		final GLCapabilities caps = determineGLCapabilities(config);
 
-        final GLCapabilities caps = determineGLCapabilities(config);
+		final String[] arguments = args;
+		SwingUtilities.invokeLater(() -> new ViewerFrame(config, caps, arguments));
+	}
 
-        final String[] arguments = args;
-        SwingUtilities.invokeLater(() -> new ViewerFrame(config, caps, arguments));
-    }
+	public ViewerFrame(Configuration config, GLCapabilities caps, String[] args)
+	{
+		super(config, config.graphics.frameWidth, config.graphics.frameHeight);
 
-    public ViewerFrame(Configuration config, GLCapabilities caps, String[] args) {
-        super(config, config.graphics.frameWidth, config.graphics.frameHeight);
+		parseArgs(args);
+		initComponents(caps);
 
-        parseArgs(args);
-        initComponents(caps);
+		System.out.println("RoboViz " + VERSION + "\n");
+	}
 
-        System.out.println("RoboViz " + VERSION + "\n");
-    }
+	private void parseArgs(String[] args)
+	{
+		StringArgument logFileArgument = new StringArgument("logFile", null);
+		BooleanArgument logModeArgument = new BooleanArgument("logMode");
+		StringArgument serverHostArgument = new StringArgument("serverHost", null);
+		IntegerArgument serverPortArgument = new IntegerArgument("serverPort", null, 1, 65535);
+		StringArgument drawingFilterArgument = new StringArgument("drawingFilter", ".*");
 
-    private void parseArgs(String[] args) {
-        StringArgument logFileArgument = new StringArgument("logFile", null);
-        BooleanArgument logModeArgument = new BooleanArgument("logMode");
-        StringArgument serverHostArgument = new StringArgument("serverHost", null);
-        IntegerArgument serverPortArgument = new IntegerArgument("serverPort", null, 1, 65535);
-        StringArgument drawingFilterArgument = new StringArgument("drawingFilter", ".*");
+		handleLogModeArgs(logFileArgument.parse(args), logModeArgument.parse(args));
+		config.networking.overrideServerHost(serverHostArgument.parse(args));
+		config.networking.overrideServerPort(serverPortArgument.parse(args));
+		drawingFilter = drawingFilterArgument.parse(args);
+		Argument.endParse(args);
+	}
 
-        handleLogModeArgs(logFileArgument.parse(args), logModeArgument.parse(args));
-        config.networking.overrideServerHost(serverHostArgument.parse(args));
-        config.networking.overrideServerPort(serverPortArgument.parse(args));
-        drawingFilter = drawingFilterArgument.parse(args);
-        Argument.endParse(args);
-    }
+	private void handleLogModeArgs(String logFilePath, boolean logMode)
+	{
+		String error = null;
 
-    private void handleLogModeArgs(String logFilePath, boolean logMode) {
-        String error = null;
+		if (logFilePath != null) {
+			// handle linux home directory
+			logFilePath = logFilePath.replaceFirst("^~", System.getProperty("user.home"));
 
-        if (logFilePath != null) {
-            // handle linux home directory
-            logFilePath = logFilePath.replaceFirst("^~", System.getProperty("user.home"));
+			logFile = new File(logFilePath);
+			mode = Mode.LOGFILE;
+			if (!logFile.exists())
+				error = "Could not find logfile '" + logFilePath + "'";
+			else if (logFile.isDirectory())
+				error = "The specified logfile '" + logFilePath + "' is a directory";
+		}
 
-            logFile = new File(logFilePath);
-            mode = Mode.LOGFILE;
-            if (!logFile.exists())
-                error = "Could not find logfile '" + logFilePath + "'";
-            else if (logFile.isDirectory())
-                error = "The specified logfile '" + logFilePath + "' is a directory";
-        }
+		if (error != null) {
+			System.err.println(error);
+			logFile = null;
+		}
 
-        if (error != null) {
-            System.err.println(error);
-            logFile = null;
-        }
+		if (logMode)
+			mode = Mode.LOGFILE;
+	}
 
-        if (logMode)
-            mode = Mode.LOGFILE;
-    }
+	private void initComponents(GLCapabilities caps)
+	{
+		canvas = new GLCanvas(caps);
+		canvas.setFocusTraversalKeysEnabled(false);
 
-    private void initComponents(GLCapabilities caps) {
-        canvas = new GLCanvas(caps);
-        canvas.setFocusTraversalKeysEnabled(false);
+		frame = new RVFrame(getTitle(null));
+		frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+		frame.addWindowListener(new WindowAdapter() {
+			@Override
+			public void windowClosing(WindowEvent e)
+			{
+				shutdown();
+			}
+		});
+		frame.addMouseMotionListener(new MouseMotionAdapter() {
+			@Override
+			public void mouseDragged(MouseEvent e)
+			{
+				movedFrame = true;
+			}
+		});
+		frame.setIconImage(Globals.getIcon());
+		frame.setLayout(new BorderLayout());
+		frame.add(canvas, BorderLayout.CENTER);
+		restoreConfig();
+		frame.setVisible(true);
+		attachDrawableAndStart(canvas);
+	}
 
-        frame = new RVFrame(getTitle(null));
-        frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-        frame.addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosing(WindowEvent e) {
-                shutdown();
-            }
-        });
-        frame.addMouseMotionListener(new MouseMotionAdapter() {
-            @Override
-            public void mouseDragged(MouseEvent e) {
-                movedFrame = true;
-            }
-        });
-        frame.setIconImage(Globals.getIcon());
-        frame.setLayout(new BorderLayout());
-        frame.add(canvas, BorderLayout.CENTER);
-        restoreConfig();
-        frame.setVisible(true);
-        attachDrawableAndStart(canvas);
-    }
+	private void restoreConfig()
+	{
+		Configuration.Graphics graphics = config.graphics;
+		int frameX = graphics.frameX;
+		int frameY = graphics.frameY;
+		boolean maximized = graphics.isMaximized;
 
-    private void restoreConfig() {
-        Configuration.Graphics graphics = config.graphics;
-        int frameX = graphics.frameX;
-        int frameY = graphics.frameY;
-        boolean maximized = graphics.isMaximized;
+		frame.setSize(graphics.frameWidth, graphics.frameHeight);
 
-        frame.setSize(graphics.frameWidth, graphics.frameHeight);
+		if (graphics.centerFrame)
+			frame.setLocationRelativeTo(null);
+		else
+			frame.setLocation(frameX, frameY);
 
-        if (graphics.centerFrame)
-            frame.setLocationRelativeTo(null);
-        else
-            frame.setLocation(frameX, frameY);
+		frame.setState(maximized ? Frame.MAXIMIZED_BOTH : Frame.NORMAL);
+	}
 
-        frame.setState(maximized ? Frame.MAXIMIZED_BOTH : Frame.NORMAL);
-    }
+	public void shutdown()
+	{
+		if (config.graphics.saveFrameState)
+			storeConfig();
+		frame.dispose();
+		System.exit(0);
+	}
 
-    public void shutdown() {
-        if (config.graphics.saveFrameState)
-            storeConfig();
-        frame.dispose();
-        System.exit(0);
-    }
+	private void storeConfig()
+	{
+		Configuration config = Configuration.loadFromFile();
+		Configuration.Graphics graphics = config.graphics;
+		Point location = frame.getLocation();
+		Dimension size = frame.getSize();
+		int state = frame.getState();
 
-    private void storeConfig()
-    {
-        Configuration config = Configuration.loadFromFile();
-        Configuration.Graphics graphics = config.graphics;
-        Point location = frame.getLocation();
-        Dimension size = frame.getSize();
-        int state = frame.getState();
+		if (movedFrame) {
+			graphics.frameX = location.x;
+			graphics.frameY = location.y;
+			graphics.centerFrame = false;
+		}
+		graphics.frameWidth = size.width;
+		graphics.frameHeight = size.height;
+		graphics.isMaximized = (state & Frame.MAXIMIZED_BOTH) > 0;
 
-        if (movedFrame) {
-            graphics.frameX = location.x;
-            graphics.frameY = location.y;
-            graphics.centerFrame = false;
-        }
-        graphics.frameWidth = size.width;
-        graphics.frameHeight = size.height;
-        graphics.isMaximized = (state & Frame.MAXIMIZED_BOTH) > 0;
+		config.write();
+	}
 
-        config.write();
-    }
+	@Override
+	public void exitError(String msg)
+	{
+		System.err.println(msg);
+		if (animator != null)
+			animator.stop();
+		if (frame != null)
+			frame.dispose();
+		System.exit(1);
+	}
 
-    @Override
-    public void exitError(String msg) {
-        System.err.println(msg);
-        if (animator != null)
-            animator.stop();
-        if (frame != null)
-            frame.dispose();
-        System.exit(1);
-    }
+	@Override
+	public void connectionChanged(ServerComm server)
+	{
+		if (mode != Mode.LIVE)
+			return;
 
-    @Override
-    public void connectionChanged(ServerComm server) {
-        if (mode != Mode.LIVE)
-            return;
+		String host = server.isConnected() ? config.networking.getServerHost() : null;
+		frame.setTitle(getTitle(host));
+	}
 
-        String host = server.isConnected() ? config.networking.getServerHost() : null;
-        frame.setTitle(getTitle(host));
-    }
+	@Override
+	public void logfileChanged()
+	{
+		frame.setTitle(getTitle(logPlayer.getFilePath()));
+	}
 
-    @Override
-    public void logfileChanged() {
-        frame.setTitle(getTitle(logPlayer.getFilePath()));
-    }
+	private String getTitle(String current)
+	{
+		String roboviz = "RoboViz " + VERSION;
+		if (current == null)
+			return roboviz;
+		return current + " - " + roboviz;
+	}
 
-    private String getTitle(String current) {
-        String roboviz = "RoboViz " + VERSION;
-        if (current == null)
-            return roboviz;
-        return current + " - " + roboviz;
-    }
+	@Override
+	public JFrame getFrame()
+	{
+		return this.frame;
+	}
 
-    @Override
-    public JFrame getFrame() {
-        return this.frame;
-    }
+	@Override
+	public MenuBar getMenu()
+	{
+		return this.frame.getMenu();
+	}
 
-    @Override
-    public MenuBar getMenu() {
-        return this.frame.getMenu();
-    }
+	public class RVFrame extends JFrame
+	{
+		private MenuBar menuBar;
 
-    public class RVFrame extends JFrame {
+		public RVFrame(String title) throws HeadlessException
+		{
+			super(title);
+			menuBar = new MenuBar(ViewerFrame.this);
+			setJMenuBar(menuBar);
+		}
 
-        private MenuBar menuBar;
+		@Override
+		public void list(PrintStream out, int indent)
+		{
+			// hack to suppress the output of java.awt.Window's
+			// hardcoded debugging hotkey Ctrl+Shift+F1
+		}
 
-        public RVFrame(String title) throws HeadlessException {
-            super(title);
-            menuBar = new MenuBar(ViewerFrame.this);
-            setJMenuBar(menuBar);
-        }
-
-        @Override
-        public void list(PrintStream out, int indent) {
-            // hack to suppress the output of java.awt.Window's
-            // hardcoded debugging hotkey Ctrl+Shift+F1
-        }
-
-        public MenuBar getMenu() {
-            return menuBar;
-        }
-    }
+		public MenuBar getMenu()
+		{
+			return menuBar;
+		}
+	}
 }

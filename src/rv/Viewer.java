@@ -56,264 +56,293 @@ import rv.world.WorldModel;
  *
  * @author Philipp Strobel
  */
-abstract public class Viewer extends GLProgram
-        implements GLEventListener, ServerComm.ServerChangeListener, LogPlayer.StateChangeListener {
+abstract public class Viewer
+		extends GLProgram implements GLEventListener, ServerComm.ServerChangeListener, LogPlayer.StateChangeListener
+{
+	private static final String VERSION = "1.6.1";
 
-    private static final String VERSION = "1.6.1";
+	public enum Mode {
+		LOGFILE,
+		LIVE,
+	}
 
-    public enum Mode {
-        LOGFILE, LIVE,
-    }
+	/** Event object for when the main RoboViz window is resized */
+	public class WindowResizeEvent extends EventObject
+	{
+		private final Viewport window;
+		private final GLAutoDrawable drawable;
 
-    /** Event object for when the main RoboViz window is resized */
-    public class WindowResizeEvent extends EventObject {
+		public Viewport getWindow()
+		{
+			return window;
+		}
 
-        private final Viewport       window;
-        private final GLAutoDrawable drawable;
+		public GLAutoDrawable getDrawable()
+		{
+			return drawable;
+		}
 
-        public Viewport getWindow() {
-            return window;
-        }
+		public WindowResizeEvent(Object src, Viewport window)
+		{
+			super(src);
+			this.window = window;
+			this.drawable = getCanvas();
+		}
+	}
 
-        public GLAutoDrawable getDrawable() {
-            return drawable;
-        }
+	/** Event listener interface when the main RoboViz window is resized */
+	public interface WindowResizeListener {
+		void windowResized(WindowResizeEvent event);
+	}
 
-        public WindowResizeEvent(Object src, Viewport window) {
-            super(src);
-            this.window = window;
-            this.drawable = getCanvas();
-        }
-    }
+	protected final List<WindowResizeListener> windowResizeListeners = new ArrayList<>();
 
-    /** Event listener interface when the main RoboViz window is resized */
-    public interface WindowResizeListener {
-        void windowResized(WindowResizeEvent event);
-    }
+	protected GLCanvas canvas;
+	protected WorldModel world;
+	protected UserInterface ui;
+	protected NetworkManager netManager;
+	protected ContentManager contentManager;
+	protected Drawings drawings;
+	protected Renderer renderer;
+	protected LogPlayer logPlayer;
+	protected boolean init = false;
+	protected boolean fullscreen = false;
+	protected GLInfo glInfo;
+	protected final Configuration config;
+	protected String ssName = null;
+	protected File logFile;
+	protected String drawingFilter;
+	protected Mode mode = Mode.LIVE;
 
-    protected final List<WindowResizeListener> windowResizeListeners = new ArrayList<>();
+	public LogPlayer getLogPlayer()
+	{
+		return logPlayer;
+	}
 
-    protected GLCanvas                         canvas;
-    protected WorldModel                       world;
-    protected UserInterface                    ui;
-    protected NetworkManager                   netManager;
-    protected ContentManager                   contentManager;
-    protected Drawings                         drawings;
-    protected Renderer                         renderer;
-    protected LogPlayer                        logPlayer;
-    protected boolean                          init                  = false;
-    protected boolean                          fullscreen            = false;
-    protected GLInfo                           glInfo;
-    protected final Configuration              config;
-    protected String                           ssName                = null;
-    protected File                             logFile;
-    protected String                           drawingFilter;
-    protected Mode                             mode                  = Mode.LIVE;
+	public Mode getMode()
+	{
+		return mode;
+	}
 
-    public LogPlayer getLogPlayer() {
-        return logPlayer;
-    }
+	public GLInfo getGLInfo()
+	{
+		return glInfo;
+	}
 
-    public Mode getMode() {
-        return mode;
-    }
+	public Configuration getConfig()
+	{
+		return config;
+	}
 
-    public GLInfo getGLInfo() {
-        return glInfo;
-    }
+	public Viewport getScreen()
+	{
+		return screen;
+	}
 
-    public Configuration getConfig() {
-        return config;
-    }
+	public WorldModel getWorldModel()
+	{
+		return world;
+	}
 
-    public Viewport getScreen() {
-        return screen;
-    }
+	public UserInterface getUI()
+	{
+		return ui;
+	}
 
-    public WorldModel getWorldModel() {
-        return world;
-    }
+	public NetworkManager getNetManager()
+	{
+		return netManager;
+	}
 
-    public UserInterface getUI() {
-        return ui;
-    }
+	public Drawings getDrawings()
+	{
+		return drawings;
+	}
 
-    public NetworkManager getNetManager() {
-        return netManager;
-    }
+	abstract public JFrame getFrame();
 
-    public Drawings getDrawings() {
-        return drawings;
-    }
+	public void addWindowResizeListener(WindowResizeListener l)
+	{
+		windowResizeListeners.add(l);
+	}
 
-    abstract public JFrame getFrame();
+	public void removeWindowResizeListener(WindowResizeListener l)
+	{
+		windowResizeListeners.remove(l);
+	}
 
-    public void addWindowResizeListener(WindowResizeListener l) {
-        windowResizeListeners.add(l);
-    }
+	public Renderer getRenderer()
+	{
+		return renderer;
+	}
 
-    public void removeWindowResizeListener(WindowResizeListener l) {
-        windowResizeListeners.remove(l);
-    }
+	public Viewer(Configuration config, int w, int h)
+	{
+		super(w, h);
+		this.config = config;
+	}
 
-    public Renderer getRenderer() {
-        return renderer;
-    }
+	public static GLCapabilities determineGLCapabilities(Configuration config)
+	{
+		GLProfile glp = GLProfile.get(GLProfile.GL2);
+		GLCapabilities caps = new GLCapabilities(glp);
+		caps.setStereo(config.graphics.useStereo);
+		if (config.graphics.useFsaa) {
+			caps.setSampleBuffers(true);
+			caps.setNumSamples(config.graphics.fsaaSamples);
+		}
+		return caps;
+	}
 
-    public Viewer(Configuration config, int w, int h) {
-        super(w, h);
-        this.config = config;
-    }
-    
-    public static GLCapabilities determineGLCapabilities(Configuration config) {
-        GLProfile glp = GLProfile.get(GLProfile.GL2);
-        GLCapabilities caps = new GLCapabilities(glp);
-        caps.setStereo(config.graphics.useStereo);
-        if (config.graphics.useFsaa) {
-            caps.setSampleBuffers(true);
-            caps.setNumSamples(config.graphics.fsaaSamples);
-        }
-        return caps;
-    }
+	@Override
+	public void init(GLAutoDrawable drawable)
+	{
+		GL2 gl = drawable.getGL().getGL2();
 
-    @Override
-    public void init(GLAutoDrawable drawable) {
-        GL2 gl = drawable.getGL().getGL2();
+		if (!init) { // print OpenGL renderer info
+			glInfo = new GLInfo(drawable.getGL());
+			glInfo.print();
+		}
 
-        if (!init) { // print OpenGL renderer info
-            glInfo = new GLInfo(drawable.getGL());
-            glInfo.print();
-        }
+		// initialize / load content
+		contentManager = new ContentManager(config.teamColors);
+		if (!contentManager.init(drawable, glInfo)) {
+			exitError("Problems loading resource files!");
+		}
 
-        // initialize / load content
-        contentManager = new ContentManager(config.teamColors);
-        if (!contentManager.init(drawable, glInfo)) {
-            exitError("Problems loading resource files!");
-        }
+		SceneGraph oldSceneGraph = null;
+		if (init)
+			oldSceneGraph = world.getSceneGraph();
+		world = new WorldModel();
+		world.init(drawable.getGL(), contentManager, config, mode);
+		drawings = new Drawings();
+		ui = new UserInterface(this, drawingFilter);
 
-        SceneGraph oldSceneGraph = null;
-        if (init)
-            oldSceneGraph = world.getSceneGraph();
-        world = new WorldModel();
-        world.init(drawable.getGL(), contentManager, config, mode);
-        drawings = new Drawings();
-        ui = new UserInterface(this, drawingFilter);
+		if (mode == Mode.LIVE) {
+			netManager = new NetworkManager();
+			netManager.init(this, config);
+			netManager.getServer().addChangeListener(world.getGameState());
+			netManager.getServer().addChangeListener(this);
+		} else {
+			if (!init) {
+				logPlayer = new LogPlayer(logFile, world, config, this);
+				logPlayer.addListener(this);
+				logfileChanged();
+			} else
+				logPlayer.setWorldModel(world);
+		}
 
-        if (mode == Mode.LIVE) {
-            netManager = new NetworkManager();
-            netManager.init(this, config);
-            netManager.getServer().addChangeListener(world.getGameState());
-            netManager.getServer().addChangeListener(this);
-        } else {
-            if (!init) {
-                logPlayer = new LogPlayer(logFile, world, config, this);
-                logPlayer.addListener(this);
-                logfileChanged();
-            } else
-                logPlayer.setWorldModel(world);
-        }
+		ui.init();
+		renderer = new Renderer(this);
+		renderer.init(drawable, contentManager, glInfo);
 
-        ui.init();
-        renderer = new Renderer(this);
-        renderer.init(drawable, contentManager, glInfo);
+		if (init && oldSceneGraph != null)
+			world.setSceneGraph(oldSceneGraph);
+		world.addSceneGraphListener(contentManager);
 
-        if (init && oldSceneGraph != null)
-            world.setSceneGraph(oldSceneGraph);
-        world.addSceneGraphListener(contentManager);
+		gl.glClearColor(0, 0, 0, 1);
+		init = true;
+	}
 
-        gl.glClearColor(0, 0, 0, 1);
-        init = true;
-    }
+	public void addKeyListener(KeyListener l)
+	{
+		(new AWTKeyAdapter(l)).addTo(canvas);
+	}
 
-    public void addKeyListener(KeyListener l) {
-        (new AWTKeyAdapter(l)).addTo(canvas);
-    }
+	public void addMouseListener(MouseListener l)
+	{
+		(new AWTMouseAdapter(l)).addTo(canvas);
+	}
 
-    public void addMouseListener(MouseListener l) {
-        (new AWTMouseAdapter(l)).addTo(canvas);
-    }
+	public void takeScreenShot()
+	{
+		String s = Calendar.getInstance().getTime().toString();
+		s = s.replaceAll("[\\s:]+", "_");
+		ssName = String.format(Locale.US, "screenshots/%s_%s.png", "roboviz", s);
+	}
 
-    public void takeScreenShot() {
-        String s = Calendar.getInstance().getTime().toString();
-        s = s.replaceAll("[\\s:]+", "_");
-        ssName = String.format(Locale.US, "screenshots/%s_%s.png", "roboviz", s);
-    }
+	private void takeScreenshot(String fileName)
+	{
+		BufferedImage ss = Screenshot.readToBufferedImage(0, 0, screen.w, screen.h, false);
+		File ssFile = new File(fileName);
+		File ssDir = new File("screenshots");
+		try {
+			if (!ssDir.exists())
+				ssDir.mkdir();
+			ImageIO.write(ss, "png", ssFile);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 
-    private void takeScreenshot(String fileName) {
-        BufferedImage ss = Screenshot.readToBufferedImage(0, 0, screen.w, screen.h, false);
-        File ssFile = new File(fileName);
-        File ssDir = new File("screenshots");
-        try {
-            if (!ssDir.exists())
-                ssDir.mkdir();
-            ImageIO.write(ss, "png", ssFile);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+		System.out.println("Screenshot taken: " + ssFile.getAbsolutePath());
+	}
 
-        System.out.println("Screenshot taken: " + ssFile.getAbsolutePath());
-    }
+	/** Enter or exit full-screen exclusive mode depending on current mode */
+	public void toggleFullScreen()
+	{
+		fullscreen = !fullscreen;
+		SwingUtil.getCurrentScreen(getFrame()).setFullScreenWindow(fullscreen ? getFrame() : null);
+	}
 
-    /** Enter or exit full-screen exclusive mode depending on current mode */
-    public void toggleFullScreen() {
-        fullscreen = !fullscreen;
-        SwingUtil.getCurrentScreen(getFrame()).setFullScreenWindow(fullscreen ? getFrame() : null);
-    }
+	abstract public void exitError(String msg);
 
-    abstract public void exitError(String msg);
+	public void update(GL glGeneric)
+	{
+		if (!init)
+			return;
 
-    public void update(GL glGeneric) {
-        if (!init)
-            return;
+		GL2 gl = glGeneric.getGL2();
+		contentManager.update(gl);
+		ui.update(gl, elapsedMS);
+		world.update(gl, elapsedMS, ui);
+		drawings.update();
+	}
 
-        GL2 gl = glGeneric.getGL2();
-        contentManager.update(gl);
-        ui.update(gl, elapsedMS);
-        world.update(gl, elapsedMS, ui);
-        drawings.update();
-    }
+	@Override
+	public void dispose(GLAutoDrawable drawable)
+	{
+		GL gl = drawable.getGL();
 
-    @Override
-    public void dispose(GLAutoDrawable drawable) {
-        GL gl = drawable.getGL();
+		if (netManager != null)
+			netManager.shutdown();
+		if (world != null)
+			world.dispose(gl);
+		if (renderer != null)
+			renderer.dispose(gl);
+		if (contentManager != null)
+			contentManager.dispose(gl);
+	}
 
-        if (netManager != null)
-            netManager.shutdown();
-        if (world != null)
-            world.dispose(gl);
-        if (renderer != null)
-            renderer.dispose(gl);
-        if (contentManager != null)
-            contentManager.dispose(gl);
-    }
+	@Override
+	public void reshape(GLAutoDrawable drawable, int x, int y, int w, int h)
+	{
+		super.reshape(drawable, x, y, w, h);
 
-    @Override
-    public void reshape(GLAutoDrawable drawable, int x, int y, int w, int h) {
-        super.reshape(drawable, x, y, w, h);
+		WindowResizeEvent event = new WindowResizeEvent(this, screen);
+		for (WindowResizeListener l : windowResizeListeners)
+			l.windowResized(event);
+	}
 
-        WindowResizeEvent event = new WindowResizeEvent(this, screen);
-        for (WindowResizeListener l : windowResizeListeners)
-            l.windowResized(event);
-    }
+	@Override
+	public void render(GL gl)
+	{
+		if (!init)
+			return;
 
-    @Override
-    public void render(GL gl) {
-        if (!init)
-            return;
+		if (ssName != null) {
+			takeScreenshot(ssName);
+			ssName = null;
+		}
 
-        if (ssName != null) {
-            takeScreenshot(ssName);
-            ssName = null;
-        }
+		renderer.render(drawable, config.graphics);
+	}
 
-        renderer.render(drawable, config.graphics);
-    }
+	@Override
+	public void playerStateChanged(boolean playing)
+	{
+		if (getUI().getTrackerCamera() != null)
+			getUI().getTrackerCamera().setPlaybackSpeed(logPlayer.getPlayBackSpeed());
+	}
 
-    @Override
-    public void playerStateChanged(boolean playing) {
-        if (getUI().getTrackerCamera() != null)
-            getUI().getTrackerCamera().setPlaybackSpeed(logPlayer.getPlayBackSpeed());
-    }
-
-    abstract public MenuBar getMenu();
+	abstract public MenuBar getMenu();
 }
